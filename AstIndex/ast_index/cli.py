@@ -1,15 +1,20 @@
 import json
-import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 
 from . import __version__
 from .config import Config, load_config, save_config
+from .database import Database
 from .indexer import Indexer
 from .search import SearchEngine
-from .database import Database
+
+
+def validate_limit(ctx, param, value):
+    """Validate that limit is a positive integer."""
+    if value is not None and value <= 0:
+        raise click.BadParameter("Limit must be a positive integer")
+    return value
 
 
 def output_result(result, format: str, message: str = None):
@@ -86,7 +91,7 @@ def rebuild(root: str, format: str):
     default="prefix",
     help="Search level",
 )
-@click.option("--limit", type=int, default=50, help="Maximum results")
+@click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
 def search(query: str, root: str, format: str, level: str, limit: int):
     """Search for symbols by name."""
     config = load_config(Path(root))
@@ -101,7 +106,7 @@ def search(query: str, root: str, format: str, level: str, limit: int):
 @click.argument("name")
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
-@click.option("--limit", type=int, default=50, help="Maximum results")
+@click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
 def search_class(name: str, root: str, format: str, limit: int):
     """Search for class/interface definitions."""
     config = load_config(Path(root))
@@ -116,7 +121,7 @@ def search_class(name: str, root: str, format: str, limit: int):
 @click.argument("symbol")
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
-@click.option("--limit", type=int, default=100, help="Maximum results")
+@click.option("--limit", type=int, default=100, help="Maximum results", callback=validate_limit)
 @click.option("--show-context", is_flag=True, help="Show context of each reference")
 @click.option("--file", type=str, help="Filter results by file path")
 def usages(symbol: str, root: str, format: str, limit: int, show_context: bool, file: str):
@@ -126,25 +131,44 @@ def usages(symbol: str, root: str, format: str, limit: int, show_context: bool, 
     with SearchEngine(config=config) as engine:
         results = engine.search_usages(symbol, limit=limit)
 
-        # Filter by file if specified
+        # Filter by file if specified - filter references, not the whole result dict
         if file:
-            results = [r for r in results if r.get("ref_file", "").endswith(file)]
+            results["references"] = [
+                r for r in results["references"]
+                if r.get("ref_file", "").endswith(file)
+            ]
 
     if format == "json":
         output_result(results, format, f"Usages of {symbol}")
     elif show_context:
-        # Custom output with context
-        if not results:
+        # Custom output with context - iterate over references, not the dict
+        references = results["references"]
+        definitions = results.get("definitions", [])
+
+        if not references and not definitions:
             click.echo(f"No usages found for {symbol}")
             return
 
-        click.echo(f"Usages of {symbol} ({len(results)} found):")
-        click.echo()
-        for ref in results:
-            click.echo(f"  {ref['ref_file']}:{ref['ref_line']}")
-            if ref.get('context'):
-                click.echo(f"    {ref['context']}")
+        # Show definitions first
+        if definitions:
+            click.echo(f"Definitions of {symbol}:")
+            for defn in definitions:
+                click.echo(f"  {defn['file_path']}:{defn['line_start']}")
             click.echo()
+
+        # Show references
+        if references:
+            click.echo(f"Usages of {symbol} ({len(references)} found):")
+            click.echo()
+            for ref in references:
+                click.echo(f"  {ref['ref_file']}:{ref['ref_line']}")
+                if ref.get('context'):
+                    # Truncate context if too long
+                    context = ref['context']
+                    if len(context) > 200:
+                        context = context[:200] + "..."
+                    click.echo(f"    {context}")
+                click.echo()
     else:
         output_result(results, format, f"Usages of {symbol}")
 

@@ -140,6 +140,153 @@ class TestSearchIntegration:
         assert "children" in results
         assert len(results["children"]) >= 1
 
+    def test_search_usages_returns_dict_structure(self, config, sample_python_file):
+        """Test that search_usages returns dict with definitions and references."""
+        with Indexer(config=config) as indexer:
+            indexer.index()
+
+        with SearchEngine(config=config) as engine:
+            results = engine.search_usages("BaseClass")
+
+        # Must return a dict with specific keys
+        assert isinstance(results, dict)
+        assert "symbol" in results
+        assert "definitions" in results
+        assert "references" in results
+        assert isinstance(results["definitions"], list)
+        assert isinstance(results["references"], list)
+
+    def test_search_usages_references_have_correct_fields(self, config, sample_python_file):
+        """Test that usages references have required fields for CLI."""
+        with Indexer(config=config) as indexer:
+            indexer.index()
+
+        with SearchEngine(config=config) as engine:
+            results = engine.search_usages("BaseClass")
+
+        # Check that each reference has required fields
+        for ref in results["references"]:
+            assert "ref_file" in ref
+            assert "ref_line" in ref
+            assert "context" in ref or "ref_kind" in ref
+
+    def test_cli_usages_command_with_file_filter(self, config, sample_python_file, tmp_path):
+        """Test CLI usages command with --file filter."""
+        from click.testing import CliRunner
+        from ast_index.cli import cli
+
+        with Indexer(config=config) as indexer:
+            indexer.index()
+
+        runner = CliRunner()
+
+        # Test without file filter - should work
+        result = runner.invoke(cli, ["usages", "BaseClass", "--root", str(config.root)])
+        assert result.exit_code == 0 or "No usages found" in result.output
+
+        # Test with file filter - should not crash
+        result = runner.invoke(cli, [
+            "usages", "BaseClass",
+            "--root", str(config.root),
+            "--file", "sample.py"
+        ])
+        assert result.exit_code == 0
+
+    def test_cli_usages_command_with_show_context(self, config, sample_python_file, tmp_path):
+        """Test CLI usages command with --show-context."""
+        from click.testing import CliRunner
+        from ast_index.cli import cli
+
+        with Indexer(config=config) as indexer:
+            indexer.index()
+
+        runner = CliRunner()
+
+        # Test with show-context - should not crash
+        result = runner.invoke(cli, [
+            "usages", "BaseClass",
+            "--root", str(config.root),
+            "--show-context"
+        ])
+        assert result.exit_code == 0
+
+    def test_cli_usages_command_with_limit_and_context(self, config, sample_python_file, tmp_path):
+        """Test CLI usages command with --limit and --show-context together."""
+        from click.testing import CliRunner
+        from ast_index.cli import cli
+
+        with Indexer(config=config) as indexer:
+            indexer.index()
+
+        runner = CliRunner()
+
+        # Test with both limit and show-context - should not crash
+        result = runner.invoke(cli, [
+            "usages", "BaseClass",
+            "--root", str(config.root),
+            "--show-context",
+            "--limit", "5"
+        ])
+        assert result.exit_code == 0
+
+    def test_no_duplicate_symbols_after_indexing(self, config, sample_python_file):
+        """Test that indexing doesn't create duplicate symbols."""
+        # Index once
+        with Indexer(config=config) as indexer:
+            stats1 = indexer.index()
+
+        # Index again (should update, not duplicate)
+        with Indexer(config=config) as indexer:
+            stats2 = indexer.index()
+
+        # Check that we don't have duplicate symbols
+        with Database(config.db_path) as db:
+            # Get all BaseClass symbols
+            symbols = db.get_symbols_by_name("BaseClass")
+
+            # Check that all have unique IDs
+            ids = [s["id"] for s in symbols]
+            assert len(ids) == len(set(ids)), f"Found duplicate IDs: {ids}"
+
+            # Check that we don't have duplicates with same file_path and line_start
+            locations = [(s["file_path"], s["line_start"]) for s in symbols]
+            assert len(locations) == len(set(locations)), f"Found duplicate symbols at same locations: {locations}"
+
+    def test_cli_rejects_negative_limit(self, config, sample_python_file):
+        """Test that CLI rejects negative limit values."""
+        from click.testing import CliRunner
+        from ast_index.cli import cli
+
+        with Indexer(config=config) as indexer:
+            indexer.index()
+
+        runner = CliRunner()
+
+        # Test search command with negative limit
+        result = runner.invoke(cli, [
+            "search", "BaseClass",
+            "--root", str(config.root),
+            "--limit", "-5"
+        ])
+        assert result.exit_code != 0
+        assert "Limit must be a positive integer" in result.output or "Invalid" in result.output
+
+        # Test class command with negative limit
+        result = runner.invoke(cli, [
+            "class", "BaseClass",
+            "--root", str(config.root),
+            "--limit", "-1"
+        ])
+        assert result.exit_code != 0
+
+        # Test usages command with negative limit
+        result = runner.invoke(cli, [
+            "usages", "BaseClass",
+            "--root", str(config.root),
+            "--limit", "0"
+        ])
+        assert result.exit_code != 0
+
 
 class TestConfigIntegration:
     """Test configuration."""
