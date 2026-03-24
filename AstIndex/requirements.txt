@@ -1,0 +1,7 @@
+click
+pyyaml
+tree-sitter
+tree-sitter-python
+tree-sitter-c-sharp
+tree-sitter-javascript
+tree-sitter-typescript
