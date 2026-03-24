@@ -1,32 +1,78 @@
 # AST Index
 
+**Версия:** 0.1.1 (от 2026-03-24)
+
 A structural code search tool that indexes codebases using Abstract Syntax Tree (AST) analysis.
+
+## ✨ Что нового в 0.1.1
+
+### 🐛 Исправленные критические ошибки:
+
+1. ✅ **Исправлен сбой `--show-context`** в команде `usages` - теперь можно просматривать контекст использований
+2. ✅ **Исправлен сбой `--file`** в команде `usages` - теперь фильтрация по файлу работает корректно
+3. ✅ **Исправлен сбой при `--show-context` + `--limit`** - комбинация опций больше не вызывает ошибок
+
+### 🔧 Улучшения:
+
+4. ✅ **Валидация отрицательных лимитов** - теперь `--limit -5` вызовет понятную ошибку
 
 ## Features
 
 - Multi-language support (Python, JavaScript, TypeScript, C#)
 - Structural code search (find functions, classes, methods by name/pattern)
 - Symbol usage tracking (find where symbols are referenced/called)
-- SQLite-based index for fast queries
+- SQLite-based index with FTS5 full-text search
 - Incremental indexing with file change detection
+- Inheritance hierarchy analysis
+- JSON output for AI/CI integration
 
 ## Installation
 
+### Quick install from source:
+
 ```bash
-pip install ast-index
+cd C:\Users\sc-20\source\repos\Diplom\AstIndex
+pip install -e .
 ```
+
+### Install from wheel:
+
+```bash
+cd C:\Users\sc-20\source\repos\Diplom\AstIndex\dist
+pip install ast_index-0.1.1-py3-none-any.whl
+```
+
+Подробная инструкция: см. [INSTALL.md](INSTALL.md)
 
 ## Usage
 
 ```bash
 # Index a project
-ast-index index /path/to/project
+ast-index index
 
-# Search for functions
-ast-index search function "handle.*"
+# Search for symbols
+ast-index search "SymbolName"
 
 # Search for classes
-ast-index search class "User"
+ast-index class "ClassName"
+
+# Find all usages of a symbol
+ast-index usages "SymbolName"
+
+# Find usages with context (исправлено в 0.1.1!)
+ast-index usages "SymbolName" --show-context
+
+# Filter usages by file (исправлено в 0.1.1!)
+ast-index usages "SymbolName" --file "path/to/file.cs"
+
+# Limit results with validation (новое в 0.1.1!)
+ast-index search "Query" --limit 10
+
+# Analyze inheritance
+ast-index inheritance "BaseClass" --direction children
+
+# View index statistics
+ast-index stats
 
 # Find usages of a symbol
 ast-index usages UserRepository
