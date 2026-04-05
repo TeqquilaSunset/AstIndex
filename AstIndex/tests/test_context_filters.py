@@ -52,3 +52,18 @@ def test_filter_custom_extension_methods():
     known_extensions = {'MyCustomExtension'}
     custom_col = line.find('MyCustomExtension')
     assert filter_extension_methods("MyCustomExtension", line, known_extensions) == True
+
+
+def test_extension_method_requires_parentheses():
+    line = 'users.Where'  # Without parentheses - not a call
+    assert filter_extension_methods("Where", line, set()) == False
+
+
+def test_extension_method_with_parentheses():
+    line = 'users.Where(x => x.Id > 0)'
+    assert filter_extension_methods("Where", line, set()) == True
+
+
+def test_extension_method_with_generic():
+    line = 'users.Select<User, int>(x => x.Id)'
+    assert filter_extension_methods("Select", line, set()) == True

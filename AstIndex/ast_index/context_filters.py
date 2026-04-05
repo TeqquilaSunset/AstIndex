@@ -6,9 +6,8 @@ from typing import Set
 
 
 # C#-специфичные паттерны для фильтрации
-_CSHARP_XML_DOC_PATTERN = re.compile(r'///\s*<')
+_CSHARP_XML_DOC_PATTERN = re.compile(r'///\s*.*')
 _CSHARP_ATTRIBUTE_PATTERN = re.compile(r'\[(.*)\]')
-_CSHARP_INTERPOLATION_PATTERN = re.compile(r'\$"?[^"]*\{[^}]*\}[^"]*"?')
 
 
 def should_exclude_context(line: str, col_start: int, symbol_name: str) -> bool:
@@ -101,10 +100,16 @@ def filter_extension_methods(
     all_extensions = common_linq_extensions | known_extensions
 
     if symbol_name in all_extensions:
-        # Проверка паттерна: something.Method(
+        # Проверка паттерна: instance.Method( или instance.Method<
         # Точка перед именем символа
         col_pos = line.find(symbol_name)
         if col_pos > 0 and line[col_pos - 1] == '.':
-            return True
+            # Проверить что после имени есть '(' или '<' (generic)
+            after_pos = col_pos + len(symbol_name)
+            if after_pos < len(line):
+                next_char = line[after_pos].strip()
+                # Check for opening paren or generic bracket
+                if next_char == '(' or next_char == '<':
+                    return True
 
     return False
