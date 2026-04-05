@@ -5,6 +5,9 @@ from tree_sitter import Language, Parser
 
 from .base import BaseParser
 from ..models import ParsedFile, FileInfo, Symbol, Inheritance, Reference
+from ..namespace_resolution import extract_using_directives
+from ..generic_parser import extract_generic_types, get_generic_reference_candidates
+from ..context_filters import should_exclude_context, filter_extension_methods
 
 
 class CSharpParser(BaseParser):
@@ -42,12 +45,16 @@ class CSharpParser(BaseParser):
 
         self._walk_tree(root, content, str(file_path), symbols, inheritances)
 
-        # Extract references using the universal method
+        # Извлечь using директивы
         content_str = content.decode("utf-8", errors="replace")
+        namespace_mapping = extract_using_directives(content_str, str(file_path))
+
+        # Извлечь ссылки с использованием C#-специфичного метода
         references = self.extract_references(
             content=content_str,
             file_path=str(file_path),
-            defined_symbols=symbols
+            defined_symbols=symbols,
+            namespace_mapping=namespace_mapping
         )
 
         return ParsedFile(
@@ -367,3 +374,98 @@ class CSharpParser(BaseParser):
         if prop_type:
             return f"{self._get_text(prop_type, source)} {name}"
         return name
+
+    def extract_references(
+        self,
+        content: str,
+        file_path: str,
+        defined_symbols: list,
+        namespace_mapping=None
+    ) -> list:
+        """
+        C#-специфичное извлечение ссылок.
+
+        Включает:
+        - Обычные ссылки (унаследовано от BaseParser)
+        - Generic типы
+        - Улучшенная фильтрация с учётом namespace mapping
+        - Контекст-зависимая фильтрация
+        """
+        from ..reference_keywords import get_keywords, get_standard_types
+        from ..references import extract_references_universal
+
+        defined_names = {sym.name for sym in defined_symbols}
+        all_references = []
+
+        # 1. Базовые ссылки (унаследовано)
+        base_references = extract_references_universal(
+            content=content,
+            file_path=file_path,
+            language=self.language,
+            defined_symbols=defined_names
+        )
+
+        # Фильтрация базовых ссылок с контекстом
+        for ref in base_references:
+            line = content.split('\n')[ref.ref_line - 1] if ref.ref_line <= len(content.split('\n')) else ""
+
+            # Проверка контекста
+            if not should_exclude_context(line, ref.ref_col, ref.symbol_name):
+                all_references.append(ref)
+
+        # 2. Generic типы
+        lines = content.split('\n')
+        keywords = get_keywords("csharp")
+        standard_types = get_standard_types("csharp")
+
+        for line_num, line in enumerate(lines, start=1):
+            # Пропуск long lines
+            if len(line) > 2000:
+                continue
+
+            # Извлечь generic типы
+            generics = extract_generic_types(line, file_path, line_num)
+
+            for generic in generics:
+                candidates = get_generic_reference_candidates(generic)
+
+                for candidate_name in candidates:
+                    # Фильтрация
+                    if candidate_name in keywords or candidate_name in standard_types:
+                        continue
+
+                    if candidate_name in defined_names:
+                        continue
+
+                    # Найти позицию символа в строке
+                    col_pos = line.find(candidate_name)
+                    if col_pos == -1:
+                        continue
+
+                    # Проверка контекста
+                    if should_exclude_context(line, col_pos, candidate_name):
+                        continue
+
+                    # Создать Reference
+                    all_references.append(
+                        Reference(
+                            symbol_name=candidate_name,
+                            symbol_file='',
+                            ref_file=file_path,
+                            ref_line=line_num,
+                            ref_col=col_pos,
+                            ref_kind='generic',
+                            context=line[:500] if len(line) > 500 else line
+                        )
+                    )
+
+        # 3. Дедупликация
+        seen = set()
+        unique_references = []
+        for ref in all_references:
+            key = (ref.symbol_name, ref.ref_file, ref.ref_line, ref.ref_col)
+            if key not in seen:
+                seen.add(key)
+                unique_references.append(ref)
+
+        return unique_references
