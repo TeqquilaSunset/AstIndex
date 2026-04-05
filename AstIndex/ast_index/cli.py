@@ -221,6 +221,58 @@ def init(root: str):
     click.echo(f"Created config at {config_path}")
 
 
+@cli.command()
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option("--root", type=click.Path(exists=True), help="Project root directory")
+@click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+def usings(file_path: str, root: str, format: str):
+    """Показать using директивы для C# файла."""
+    from pathlib import Path
+    from .database import Database
+    from .project_detection import detect_project_root
+
+    if root:
+        project_root = Path(root).resolve()
+    else:
+        project_root = detect_project_root(Path(file_path).resolve())
+
+    if not project_root:
+        click.echo("Error: Cannot find project root", err=True)
+        return
+
+    config = load_config(project_root)
+    db = Database(config.db_path)
+    file_path_str = str(Path(file_path).resolve())
+
+    with db:
+        mapping = db.get_usings_for_file(file_path_str)
+
+    if format == "json":
+        import json
+        output = {
+            'file': file_path_str,
+            'imports': list(mapping.imports),
+            'static_imports': list(mapping.static_imports),
+            'aliases': mapping.aliases
+        }
+        click.echo(json.dumps(output, indent=2))
+    else:
+        click.echo(f"Usings for {file_path}:")
+        click.echo("\nImports:")
+        for imp in sorted(mapping.imports):
+            click.echo(f"  {imp}")
+
+        if mapping.static_imports:
+            click.echo("\nStatic Imports:")
+            for imp in sorted(mapping.static_imports):
+                click.echo(f"  {imp}")
+
+        if mapping.aliases:
+            click.echo("\nAliases:")
+            for alias, target in sorted(mapping.aliases.items()):
+                click.echo(f"  {alias} = {target}")
+
+
 def main():
     cli()
 
