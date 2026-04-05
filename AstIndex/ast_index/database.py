@@ -377,3 +377,18 @@ class Database:
         cursor = self._conn.cursor()
         cursor.execute("DELETE FROM usings WHERE file_path = ?", (file_path,))
         self._conn.commit()
+
+    def get_references_for_file(self, file_path: str) -> List[Dict[str, Any]]:
+        """
+        Получить все ссылки в указанном файле.
+
+        Args:
+            file_path: Путь к файлу
+
+        Returns:
+            Список словарей с информацией о ссылках
+        """
+        rows = self._conn.execute(
+            "SELECT * FROM refs WHERE ref_file = ?", (file_path,)
+        ).fetchall()
+        return [dict(row) for row in rows]
