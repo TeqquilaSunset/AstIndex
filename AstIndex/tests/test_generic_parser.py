@@ -68,3 +68,23 @@ def test_no_generics_in_code():
     generics = extract_generic_types(code, "test.cs", 1)
 
     assert len(generics) == 0
+
+
+def test_empty_generic():
+    code = 'var x = List<>();'
+    generics = extract_generic_types(code, "test.cs", 1)
+    assert len(generics) == 0  # Empty generics should be skipped
+
+
+def test_mixed_spaces_around_brackets():
+    code = 'var list = new List < string >();'
+    generics = extract_generic_types(code, "test.cs", 1)
+    assert len(generics) == 1
+    assert generics[0].base_type == "List"
+    assert generics[0].type_arguments == ["string"]
+
+
+def test_unbalanced_brackets():
+    code = 'var list = new List<int;'
+    generics = extract_generic_types(code, "test.cs", 1)
+    assert len(generics) == 0  # Should skip malformed generics

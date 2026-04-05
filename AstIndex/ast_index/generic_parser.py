@@ -14,21 +14,14 @@ class GenericType:
     full_name: str           # List<string>
 
 
-_GENERIC_PATTERN = None
-
-
-def _get_generic_pattern() -> re.Pattern:
-    """Get cached generic type pattern."""
-    global _GENERIC_PATTERN
-    if _GENERIC_PATTERN is None:
-        _GENERIC_PATTERN = re.compile(
-            r'\b([A-Z][a-zA-Z0-9_]*)\s*<([^>]*<[^>]*>[^>]*)?>'
-        )
-    return _GENERIC_PATTERN
 
 
 def _find_generic_types_manually(content: str) -> List[tuple]:
     """Manually find generic types with proper nested handling."""
+    # Remove spaces around angle brackets to handle mixed spacing
+    content = re.sub(r'\s*<\s*', '<', content)
+    content = re.sub(r'\\s*>\s*', '>', content)
+
     results = []
     i = 0
     n = len(content)
@@ -101,6 +94,10 @@ def extract_generic_types(
     generic_matches = _find_generic_types_manually(content)
 
     for base_type, type_args_str in generic_matches:
+        # Skip empty generic type arguments
+        if not type_args_str.strip():
+            continue
+
         # Парсинг type arguments (учитывая вложенные generic)
         type_args = _parse_type_arguments(type_args_str)
 
