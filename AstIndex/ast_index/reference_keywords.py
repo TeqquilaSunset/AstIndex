@@ -38,19 +38,59 @@ CSHARP_KEYWORDS = {
     "readonly", "ref", "return", "sbyte", "sealed", "short", "sizeof",
     "static", "string", "struct", "switch", "this", "throw", "true",
     "try", "typeof", "uint", "ulong", "unchecked", "unsafe", "ushort",
-    "using", "var", "virtual", "void", "volatile", "while"
+    "using", "var", "virtual", "void", "volatile", "when", "where",
+    "yield", "async", "await", "nint", "nuint", "record", "with", "init",
+    "required", "file", "line", "allow"
 }
 
 CSHARP_STANDARD_TYPES = {
-    "Object", "String", "Int32", "Int64", "Double", "Float", "Decimal",
-    "Boolean", "Char", "Byte", "SByte", "UInt16", "UInt32", "UInt64",
+    # Примитивные типы и алиасы
+    "object", "string", "bool", "byte", "sbyte", "char", "decimal",
+    "double", "float", "int", "uint", "long", "ulong", "short", "ushort",
+    "nint", "nuint",
+    # .NET типы
+    "Object", "String", "Boolean", "Byte", "SByte", "Char", "Decimal",
+    "Double", "Single", "Int32", "UInt32", "Int64", "UInt64", "Int16",
+    "UInt16", "IntPtr", "UIntPtr",
+    # Collections
     "Array", "List", "Dictionary", "HashSet", "Queue", "Stack",
-    "IEnumerable", "ICollection", "IList", "IDictionary",
-    "DateTime", "TimeSpan", "Guid", "Uri",
+    "LinkedList", "SortedList", "SortedDictionary", "SortedSet",
+    "ObservableCollection", "Collection",
+    # Interfaces
+    "IEnumerable", "ICollection", "IList", "IDictionary", "IReadOnlyList",
+    "IReadOnlyCollection", "IReadOnlyDictionary", "IQueryable", "IEnumerator",
+    "IEqualityComparer", "IComparer",
+    # Generics
+    "Nullable", "Tuple", "ValueTuple", "Lazy", "Task",
+    # LINQ
+    "Enumerable", "Queryable", "IGrouping", "ILookup",
+    # Common .NET types
+    "DateTime", "DateTimeOffset", "TimeSpan", "Guid", "Uri", "Version",
+    "StringBuilder", "StringComparison", "StringSplitOptions",
+    # Exceptions
     "Exception", "ArgumentException", "ArgumentNullException",
-    "InvalidOperationException", "NotSupportedException",
-    "Task", "Task", "IEnumerable", "IEnumerator",
-    "Nullable", "Tuple", "ValueTuple"
+    "ArgumentOutOfRangeException", "InvalidOperationException",
+    "NotSupportedException", "NotImplementedException", "IOException",
+    "FileNotFoundException", "DirectoryNotFoundException",
+    # Attributes
+    "Attribute", "ObsoleteAttribute", "SerializableAttribute",
+    # Threading
+    "Thread", "TaskFactory", "CancellationToken", "CancellationTokenSource",
+    "Mutex", "SemaphoreSlim", "Monitor",
+    # IO
+    "Stream", "FileStream", "MemoryStream", "StreamReader", "StreamWriter",
+    "TextReader", "TextWriter", "BinaryReader", "BinaryWriter",
+    "File", "Directory", "Path", "FileInfo", "DirectoryInfo",
+    # Reflection
+    "Type", "TypeInfo", "MemberInfo", "MethodInfo", "PropertyInfo", "FieldInfo",
+    "Assembly", "AssemblyName",
+    # Text/Encoding
+    "Encoding", "UTF8Encoding", "ASCIIEncoding", "CultureInfo", "Regex",
+    "Match", "Group", "Capture",
+    # Logging
+    "ILogger", "ILoggerFactory", "LogLevel",
+    # Dependency Injection
+    "IServiceProvider", "IServiceCollection", "IServiceScope"
 }
 
 # JavaScript
