@@ -46,6 +46,9 @@ env/
 .DS_Store
 Thumbs.db
 
+# Git worktrees
+.worktrees/
+
 .claude
 .opencode
 docs/
