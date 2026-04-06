@@ -97,3 +97,38 @@ def test_resolve_symbol_multiple_candidates(db_path):
 
     assert result is not None
     assert result["file_path"] == "/project/Models/User.cs"
+
+
+def test_get_symbols_by_name_and_namespace(db_path):
+    """Test getting symbols filtered by namespace."""
+    from ast_index.models import Symbol
+    from ast_index.database import Database
+
+    db = Database(db_path)
+
+    # Setup
+    symbol1 = Symbol(
+        name="User",
+        kind="class",
+        file_path="/project/Models/User.cs",
+        line_start=1,
+        line_end=10,
+        scope="App.Models"
+    )
+    symbol2 = Symbol(
+        name="User",
+        kind="class",
+        file_path="/project/DTO/User.cs",
+        line_start=1,
+        line_end=10,
+        scope="App.DTO"
+    )
+
+    db.insert_symbol(symbol1)
+    db.insert_symbol(symbol2)
+
+    # Test
+    results = db.get_symbols_by_name_and_namespace("User", "App.Models")
+
+    assert len(results) == 1
+    assert results[0]["file_path"] == "/project/Models/User.cs"

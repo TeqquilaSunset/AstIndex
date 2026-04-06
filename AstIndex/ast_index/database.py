@@ -390,3 +390,34 @@ class Database:
             "SELECT * FROM refs WHERE ref_file = ?", (file_path,)
         ).fetchall()
         return [dict(row) for row in rows]
+
+    def get_symbols_by_name_and_namespace(
+        self,
+        name: str,
+        namespace: str | None = None
+    ) -> list[dict[str, Any]]:
+        """
+        Получить символы по имени с опциональной фильтрацией по namespace.
+
+        Args:
+            name: Имя символа
+            namespace: Опциональный namespace для фильтрации
+
+        Returns:
+            Список символов
+        """
+        if namespace:
+            rows = self._conn.execute(
+                """SELECT * FROM symbols
+                   WHERE name = ? AND scope LIKE ?
+                   ORDER BY scope
+                """,
+                (name, f"%{namespace}%")
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM symbols WHERE name = ? ORDER BY scope",
+                (name,)
+            ).fetchall()
+
+        return [dict(row) for row in rows]
