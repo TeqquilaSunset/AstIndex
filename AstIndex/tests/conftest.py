@@ -186,3 +186,69 @@ def search_engine(config):
     engine = SearchEngine(config=config)
     yield engine
     engine.close()
+
+
+@pytest.fixture
+def sample_csharp_project(temp_dir):
+    """Create a sample C# project with multiple files for testing."""
+    # Models/UserRepository.cs
+    models_dir = temp_dir / "Models"
+    models_dir.mkdir()
+    (models_dir / "UserRepository.cs").write_text("""
+using System;
+
+namespace App.Models
+{
+    public class UserRepository
+    {
+        public void FindUser(int id)
+        {
+            Console.WriteLine($"Finding user {id}");
+        }
+    }
+}
+""")
+
+    # DTO/User.cs
+    dto_dir = temp_dir / "DTO"
+    dto_dir.mkdir()
+    (dto_dir / "User.cs").write_text("""
+namespace App.DTO
+{
+    public class User
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+    }
+}
+""")
+
+    # Controllers/HomeController.cs
+    controllers_dir = temp_dir / "Controllers"
+    controllers_dir.mkdir()
+    (controllers_dir / "HomeController.cs").write_text("""
+using App.Models;
+using App.DTO;
+
+namespace App.Controllers
+{
+    public class HomeController
+    {
+        private UserRepository _repo;
+
+        public void GetUser(int id)
+        {
+            var user = new User();
+            _repo.FindUser(id);
+        }
+    }
+}
+""")
+
+    return temp_dir
+
+
+@pytest.fixture
+def db_path(temp_dir):
+    """Create a database path for testing."""
+    return str(temp_dir / "test.db")
