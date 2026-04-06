@@ -310,6 +310,34 @@ class TestDefinitionCommand:
         assert result["name"] == "UserRepository"
         assert result["kind"] == "class"
 
+    def test_definition_command(self, config, sample_csharp_project):
+        """Test CLI definition command."""
+        from click.testing import CliRunner
+        from ast_index.cli import cli
+        import json
+
+        with Indexer(config=config) as indexer:
+            indexer.index()
+
+        runner = CliRunner()
+
+        # Test with file reference and JSON output
+        result = runner.invoke(cli, [
+            "definition",
+            "UserRepository",
+            "--root", str(config.root),
+            "--file", "Controllers/HomeController.cs",
+            "--format", "json"
+        ])
+
+        assert result.exit_code == 0
+        output = json.loads(result.output)
+
+        assert "name" in output
+        assert output["name"] == "UserRepository" or "error" in output
+        if "error" not in output:
+            assert "file_path" in output
+
 
 class TestConfigIntegration:
     """Test configuration."""

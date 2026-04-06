@@ -274,6 +274,47 @@ def usings(file_path: str, root: str, format: str):
                 click.echo(f"  {alias} = {target}")
 
 
+@cli.command()
+@click.argument("symbol")
+@click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
+@click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option("--file", type=str, help="Reference file path for import resolution")
+def definition(symbol: str, root: str, format: str, file: str | None):
+    """Find symbol definition with import resolution."""
+    config = load_config(Path(root))
+
+    with SearchEngine(config=config) as engine:
+        result = engine.search_definition(
+            symbol_name=symbol,
+            reference_file=file
+        )
+
+    if result is None:
+        if format == "json":
+            click.echo(json.dumps({"error": "Definition not found"}, indent=2))
+        else:
+            click.echo(f"Definition not found: {symbol}")
+        return
+
+    if format == "json":
+        output = {
+            "name": result["name"],
+            "kind": result["kind"],
+            "file_path": result["file_path"],
+            "line_start": result["line_start"],
+            "line_end": result["line_end"],
+            "signature": result.get("signature"),
+        }
+        click.echo(json.dumps(output, indent=2, default=str))
+    else:
+        click.echo(f"Definition of {symbol}:")
+        click.echo(f"  Kind: {result['kind']}")
+        click.echo(f"  File: {result['file_path']}")
+        click.echo(f"  Lines: {result['line_start']}-{result['line_end']}")
+        if result.get('signature'):
+            click.echo(f"  Signature: {result['signature']}")
+
+
 def main():
     cli()
 
