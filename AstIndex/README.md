@@ -31,18 +31,16 @@ A structural code search tool that indexes codebases using Abstract Syntax Tree 
 ### Quick install from source:
 
 ```bash
-cd C:\Users\sc-20\source\repos\Diplom\AstIndex
+cd /path/to/AstIndex
 pip install -e .
 ```
 
 ### Install from wheel:
 
 ```bash
-cd C:\Users\sc-20\source\repos\Diplom\AstIndex\dist
+cd /path/to/AstIndex/dist
 pip install ast_index-0.1.1-py3-none-any.whl
 ```
-
-Подробная инструкция: см. [INSTALL.md](INSTALL.md)
 
 ## Usage
 
