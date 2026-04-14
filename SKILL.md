@@ -34,35 +34,99 @@ ast-index index
 
 ## Available Commands
 
-### 1. **index** - Create/update project index
+### 1. **init** - Initialize project with default config
 ```bash
-ast-index index [--root PATH] [--format text|json]
+ast-index init [--root PATH]
 ```
+Creates `.ast-index.yaml` with default configuration for the project.
 
-### 2. **update** - Incremental update (changed files only)
+### 2. **index** - Create full project index
+```bash
+ast-index index [--root PATH] [--format text|json] [--jobs N]
+```
+Performs complete indexing of all files in the project. Use for first-time indexing or after major changes.
+
+### 3. **update** - Incremental update (changed files only)
 ```bash
 ast-index update [--root PATH]
 ```
+Updates index by processing only new/modified/deleted files since last index. **Faster than full indexing** - use after code changes.
 
-### 3. **search** - Find symbols by name/pattern
+### 4. **rebuild** - Rebuild index from scratch
 ```bash
-ast-index search QUERY [--level exact|prefix|fuzzy] [--limit N]
+ast-index rebuild [--root PATH]
 ```
+Clears existing index and performs complete reindexing. Use after major refactoring or if index becomes corrupted.
 
-### 4. **usages** - Find all symbol usages/references
+### 5. **search** - Find symbols by name/pattern
 ```bash
-ast-index usages SYMBOL [--show-context] [--file PATH] [--limit N]
+ast-index search [QUERY] [--level exact|prefix|fuzzy] [--limit N]
 ```
+If QUERY is not provided, lists all symbols.
 
-### 5. **inheritance** - Show inheritance hierarchy
+### 6. **usages** - Find all symbol usages/references
+```bash
+ast-index usages [SYMBOL] [--show-context] [--file PATH] [--limit N]
+```
+If SYMBOL is not provided, shows most referenced symbols (top-N).
+
+### 7. **inheritance** - Show inheritance hierarchy
 ```bash
 ast-index inheritance SYMBOL [--direction children|parents|both]
 ```
 
-### 6. **stats** - Index statistics
+### 8. **stats** - Index statistics
 ```bash
 ast-index stats
 ```
+
+### 9. **definition** - Find symbol definition with import resolution
+```bash
+ast-index definition SYMBOL [--file PATH]
+```
+
+### 10. **class** - Search for class/interface definitions
+```bash
+ast-index class [NAME] [--limit N]
+```
+If NAME is not provided, lists all classes.
+
+### 11. **methods** - List all methods
+```bash
+ast-index methods [--limit N]
+```
+
+### 12. **functions** - List all functions
+```bash
+ast-index functions [--limit N]
+```
+
+### 13. **interfaces** - List all interfaces
+```bash
+ast-index interfaces [--limit N]
+```
+
+### 14. **types** - List all type aliases
+```bash
+ast-index types [--limit N]
+```
+
+### 15. **top** - Show most referenced symbols
+```bash
+ast-index top [--limit N]
+```
+
+### 16. **kinds** - List all symbol kinds in project
+```bash
+ast-index kinds
+```
+Finds the definition of a symbol. Use `--file` to specify which file is using the symbol (helps resolve which definition when multiple exist).
+
+### 10. **class** - Search for class/interface definitions
+```bash
+ast-index class [NAME] [--limit N]
+```
+If NAME is not provided, lists all classes in the index.
 
 ## Common Workflows
 
@@ -130,6 +194,12 @@ ast-index stats
 # symbols: 2340
 # inheritances: 85
 # references: 5670
+
+# List all classes (first 50)
+ast-index class
+
+# List all classes with custom limit
+ast-index class --limit 100
 
 # Find all classes in a module
 ast-index search "Repository*" --level prefix
@@ -199,12 +269,22 @@ git log -p --all -S "symbolName" -- "*.py"
 
 After code changes:
 ```bash
-# After small changes (faster)
+# After small changes (faster - only processes changed files)
 ast-index update
 
 # After major refactoring (complete rebuild)
 ast-index rebuild
+
+# First time indexing
+ast-index init      # Create config file (optional)
+ast-index index     # Build initial index
 ```
+
+**When to use each command:**
+- **`init`**: First time setting up a project (creates `.ast-index.yaml`)
+- **`index`**: First time indexing or when you want to rebuild everything
+- **`update`**: After regular code changes (fast - only processes changed files)
+- **`rebuild`**: When index is corrupted or after massive refactoring
 
 ## Limitations
 
@@ -280,8 +360,9 @@ ast-index search "test_*" --level prefix
 ### For Code Analysis
 1. Index the project: `ast-index index`
 2. Get symbol info: `ast-index search SymbolName`
-3. Find usages: `ast-index usages --show-context SymbolName`
-4. Analyze patterns: `ast-index search "*Pattern*" --level prefix`
+3. List all classes: `ast-index class --limit 100`
+4. Find usages: `ast-index usages --show-context SymbolName`
+5. Analyze patterns: `ast-index search "*Pattern*" --level prefix`
 
 ### For Refactoring
 1. **Before:** `ast-index usages --show-context OldSymbol`
@@ -289,7 +370,7 @@ ast-index search "test_*" --level prefix
 3. **Verify:** `ast-index usages NewSymbol`
 
 ### For Documentation
-1. Find main classes: `ast-index search "*" --limit 100`
+1. Find main classes: `ast-index class --limit 100`
 2. Get inheritance: `ast-index inheritance ClassName --direction both`
 3. Find public APIs: `ast-index search "public*" --level prefix`
 
@@ -317,9 +398,13 @@ ast-index rebuild
 ```bash
 # Most common commands
 ast-index index                              # Index project
-ast-index usages MethodName                  # Find calls
-ast-index usages --show-context MethodName   # Find with context
-ast-index search "ClassName"                 # Find symbol
-ast-index inheritance ClassName             # Show hierarchy
+ast-index search [QUERY]                     # Search symbols (all if no query)
+ast-index usages [SYMBOL]                    # Find usages (top if no symbol)
+ast-index class [NAME]                       # List/search classes
+ast-index methods                            # List all methods
+ast-index functions                          # List all functions
+ast-index interfaces                         # List all interfaces
+ast-index top                                # Most referenced symbols
+ast-index kinds                              # Symbol kinds in project
 ast-index stats                              # Show statistics
 ```

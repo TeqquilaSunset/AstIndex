@@ -92,7 +92,7 @@ def rebuild(root: str, format: str):
 
 
 @cli.command()
-@click.argument("query")
+@click.argument("query", required=False, default=None)
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
 @click.option(
@@ -102,43 +102,64 @@ def rebuild(root: str, format: str):
     help="Search level",
 )
 @click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
-def search(query: str, root: str, format: str, level: str, limit: int):
-    """Search for symbols by name."""
+def search(query: str | None, root: str, format: str, level: str, limit: int):
+    """Search for symbols by name. If QUERY is not provided, lists all symbols."""
     config = load_config(Path(root))
 
     with SearchEngine(config=config) as engine:
         results = engine.search(query, limit=limit, level=level)
 
-    output_result(results, format, f"Found {len(results)} symbols")
+    if query is None:
+        output_result(results, format, f"Found {len(results)} symbols (all)")
+    else:
+        output_result(results, format, f"Found {len(results)} symbols matching '{query}'")
 
 
 @cli.command("class")
-@click.argument("name")
+@click.argument("name", required=False, default=None)
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
 @click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
-def search_class(name: str, root: str, format: str, limit: int):
-    """Search for class/interface definitions."""
+def search_class(name: str | None, root: str, format: str, limit: int):
+    """Search for class/interface definitions. If NAME is not provided, lists all classes."""
     config = load_config(Path(root))
 
     with SearchEngine(config=config) as engine:
         results = engine.search_class(name, limit=limit)
 
-    output_result(results, format, f"Found {len(results)} classes")
+    if name is None:
+        output_result(results, format, f"Found {len(results)} classes (all)")
+    else:
+        output_result(results, format, f"Found {len(results)} classes matching '{name}'")
 
 
 @cli.command()
-@click.argument("symbol")
+@click.argument("symbol", required=False, default=None)
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
 @click.option("--limit", type=int, default=100, help="Maximum results", callback=validate_limit)
 @click.option("--show-context", is_flag=True, help="Show context of each reference")
 @click.option("--file", type=str, help="Filter results by file path")
-def usages(symbol: str, root: str, format: str, limit: int, show_context: bool, file: str):
-    """Find all usages of a symbol."""
+def usages(symbol: str | None, root: str, format: str, limit: int, show_context: bool, file: str):
+    """Find all usages of a symbol. If SYMBOL is not provided, shows most referenced symbols."""
     config = load_config(Path(root))
 
     with SearchEngine(config=config) as engine:
+        if symbol is None:
+            # Show top referenced symbols
+            results = engine.get_top_symbols(limit=limit)
+
+            if format == "json":
+                output_result(results, format, f"Top {len(results)} most referenced symbols")
+            else:
+                click.echo(f"Top {len(results)} most referenced symbols:")
+                click.echo()
+                for item in results:
+                    ref_count = item.get("reference_count", 0)
+                    click.echo(f"  {ref_count:4d} - {item['name']} ({item['kind']}) in {item['file_path']}")
+            return
+
+        # Original behavior when symbol is provided
         results = engine.search_usages(symbol, limit=limit)
 
         # Filter by file if specified - filter references, not the whole result dict
@@ -323,6 +344,102 @@ def definition(symbol: str, root: str, format: str, file: str | None):
         click.echo(f"  Lines: {result['line_start']}-{result['line_end']}")
         if result.get('signature'):
             click.echo(f"  Signature: {result['signature']}")
+
+
+@cli.command()
+@click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
+@click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
+def methods(root: str, format: str, limit: int):
+    """List all methods."""
+    config = load_config(Path(root))
+
+    with SearchEngine(config=config) as engine:
+        results = engine.search_by_kind("method", limit=limit)
+
+    output_result(results, format, f"Found {len(results)} methods")
+
+
+@cli.command()
+@click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
+@click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
+def functions(root: str, format: str, limit: int):
+    """List all functions."""
+    config = load_config(Path(root))
+
+    with SearchEngine(config=config) as engine:
+        results = engine.search_by_kind("function", limit=limit)
+
+    output_result(results, format, f"Found {len(results)} functions")
+
+
+@cli.command()
+@click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
+@click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
+def interfaces(root: str, format: str, limit: int):
+    """List all interfaces."""
+    config = load_config(Path(root))
+
+    with SearchEngine(config=config) as engine:
+        results = engine.search_by_kind("interface", limit=limit)
+
+    output_result(results, format, f"Found {len(results)} interfaces")
+
+
+@cli.command()
+@click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
+@click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
+def types(root: str, format: str, limit: int):
+    """List all type aliases."""
+    config = load_config(Path(root))
+
+    with SearchEngine(config=config) as engine:
+        results = engine.search_by_kind("type_alias", limit=limit)
+
+    output_result(results, format, f"Found {len(results)} type aliases")
+
+
+@cli.command()
+@click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
+@click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
+def top(root: str, format: str, limit: int):
+    """Show most referenced symbols."""
+    config = load_config(Path(root))
+
+    with SearchEngine(config=config) as engine:
+        results = engine.get_top_symbols(limit=limit)
+
+    if format == "json":
+        output_result(results, format, f"Top {len(results)} most referenced symbols")
+    else:
+        click.echo(f"Top {len(results)} most referenced symbols:")
+        click.echo()
+        for item in results:
+            ref_count = item.get("reference_count", 0)
+            click.echo(f"  {ref_count:4d} - {item['name']} ({item['kind']}) in {item['file_path']}")
+
+
+@cli.command()
+@click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
+@click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+def kinds(root: str, format: str):
+    """List all symbol kinds present in the project."""
+    config = load_config(Path(root))
+
+    with SearchEngine(config=config) as engine:
+        results = engine.get_all_kinds()
+
+    if format == "json":
+        output_result(results, format, f"Found {len(results)} symbol kinds")
+    else:
+        click.echo(f"Symbol kinds in project ({len(results)} total):")
+        click.echo()
+        for item in results:
+            click.echo(f"  {item['kind']:20s} - {item['count']:4d} symbols")
 
 
 def main():

@@ -23,7 +23,26 @@ class SearchEngine:
             self._resolver = SymbolResolver(self.db)
         return self._resolver
 
-    def search(self, query: str, limit: int = 50, level: str = "prefix") -> list[dict[str, Any]]:
+    def search(self, query: str | None, limit: int = 50, level: str = "prefix") -> list[dict[str, Any]]:
+        """
+        Search for symbols by name/pattern.
+
+        Args:
+            query: Symbol name or pattern. If None, returns all symbols.
+            limit: Maximum number of results.
+            level: Search level (exact, prefix, fuzzy).
+
+        Returns:
+            List of matching symbols.
+        """
+        if query is None:
+            # Return all symbols
+            cursor = self.db._conn.execute(
+                "SELECT * FROM symbols ORDER BY name LIMIT ?",
+                (limit,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
         if level == "exact":
             return self.db.get_symbols_by_name(query)[:limit]
         elif level == "prefix":
@@ -58,11 +77,29 @@ class SearchEngine:
         )
         return [dict(row) for row in cursor.fetchall()]
 
-    def search_class(self, name: str, limit: int = 50) -> list[dict[str, Any]]:
-        cursor = self.db._conn.execute(
-            "SELECT * FROM symbols WHERE name LIKE ? AND kind IN ('class', 'interface') ORDER BY name LIMIT ?",
-            (f"%{name}%", limit),
-        )
+    def search_class(self, name: str | None, limit: int = 50) -> list[dict[str, Any]]:
+        """
+        Search for class/interface definitions.
+
+        Args:
+            name: Class name to search for (fuzzy match). If None, returns all classes.
+            limit: Maximum number of results.
+
+        Returns:
+            List of class/interface symbols.
+        """
+        if name is None:
+            # Return all classes/interfaces
+            cursor = self.db._conn.execute(
+                "SELECT * FROM symbols WHERE kind IN ('class', 'interface') ORDER BY name LIMIT ?",
+                (limit,),
+            )
+        else:
+            # Search by name (fuzzy match)
+            cursor = self.db._conn.execute(
+                "SELECT * FROM symbols WHERE name LIKE ? AND kind IN ('class', 'interface') ORDER BY name LIMIT ?",
+                (f"%{name}%", limit),
+            )
         return [dict(row) for row in cursor.fetchall()]
 
     def search_usages(self, symbol_name: str, limit: int = 100) -> dict[str, Any]:
@@ -132,6 +169,46 @@ class SearchEngine:
                 return symbol
 
         return symbols[0]
+
+    def get_top_symbols(self, limit: int = 50) -> list[dict[str, Any]]:
+        """
+        Get most referenced symbols.
+
+        Args:
+            limit: Maximum number of results.
+
+        Returns:
+            List of symbols with reference counts, sorted by usage.
+        """
+        cursor = self.db._conn.execute(
+            """
+            SELECT s.*, COUNT(r.id) as reference_count
+            FROM symbols s
+            LEFT JOIN refs r ON s.name = r.symbol_name
+            GROUP BY s.name, s.kind
+            ORDER BY reference_count DESC, s.name
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_all_kinds(self) -> list[dict[str, Any]]:
+        """
+        Get all symbol kinds present in the database with counts.
+
+        Returns:
+            List of unique kinds with their counts.
+        """
+        cursor = self.db._conn.execute(
+            """
+            SELECT kind, COUNT(*) as count
+            FROM symbols
+            GROUP BY kind
+            ORDER BY count DESC
+            """
+        )
+        return [dict(row) for row in cursor.fetchall()]
 
     def close(self):
         self.db.close()
