@@ -1,10 +1,10 @@
 ---
-name: code-search-ast-index
+name: ast-index
 description: Structural code search and symbol usage tracking with AST Index tool for efficient codebase navigation
 type: reference
 ---
 
-# AST Index - Structural Code Search Skill
+# AST Index
 
 ## Overview
 
