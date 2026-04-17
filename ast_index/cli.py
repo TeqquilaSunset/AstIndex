@@ -45,7 +45,9 @@ def cli():
 @cli.command()
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
-@click.option("--jobs", "-j", type=int, default=None, help="Number of parallel jobs (default: CPU count)")
+@click.option(
+    "--jobs", "-j", type=int, default=None, help="Number of parallel jobs (default: CPU count)"
+)
 @click.option("--no-parallel", is_flag=True, help="Disable parallel processing")
 def index(root: str, format: str, jobs: int | None, no_parallel: bool):
     """Index the project."""
@@ -62,7 +64,17 @@ def index(root: str, format: str, jobs: int | None, no_parallel: bool):
     with Indexer(**indexer_kwargs) as indexer:
         stats = indexer.index()
 
-    output_result(stats, format, "Indexing complete")
+    elapsed = stats.pop("elapsed_time", None)
+    if format == "json":
+        if elapsed is not None:
+            stats["elapsed_time"] = elapsed
+        output_result(stats, format, "Indexing complete")
+    else:
+        click.echo("Indexing complete")
+        for key, value in stats.items():
+            click.echo(f"{key}: {value}")
+        if elapsed is not None:
+            click.echo(f"time: {elapsed}s")
 
 
 @cli.command()
@@ -75,7 +87,17 @@ def update(root: str, format: str):
     with Indexer(config=config) as indexer:
         stats = indexer.update()
 
-    output_result(stats, format, "Update complete")
+    elapsed = stats.pop("elapsed_time", None)
+    if format == "json":
+        if elapsed is not None:
+            stats["elapsed_time"] = elapsed
+        output_result(stats, format, "Update complete")
+    else:
+        click.echo("Update complete")
+        for key, value in stats.items():
+            click.echo(f"{key}: {value}")
+        if elapsed is not None:
+            click.echo(f"time: {elapsed}s")
 
 
 @cli.command()
@@ -88,7 +110,17 @@ def rebuild(root: str, format: str):
     with Indexer(config=config) as indexer:
         stats = indexer.rebuild()
 
-    output_result(stats, format, "Rebuild complete")
+    elapsed = stats.pop("elapsed_time", None)
+    if format == "json":
+        if elapsed is not None:
+            stats["elapsed_time"] = elapsed
+        output_result(stats, format, "Rebuild complete")
+    else:
+        click.echo("Rebuild complete")
+        for key, value in stats.items():
+            click.echo(f"{key}: {value}")
+        if elapsed is not None:
+            click.echo(f"time: {elapsed}s")
 
 
 @cli.command()
@@ -156,7 +188,9 @@ def usages(symbol: str | None, root: str, format: str, limit: int, show_context:
                 click.echo()
                 for item in results:
                     ref_count = item.get("reference_count", 0)
-                    click.echo(f"  {ref_count:4d} - {item['name']} ({item['kind']}) in {item['file_path']}")
+                    click.echo(
+                        f"  {ref_count:4d} - {item['name']} ({item['kind']}) in {item['file_path']}"
+                    )
             return
 
         # Original behavior when symbol is provided
@@ -165,8 +199,7 @@ def usages(symbol: str | None, root: str, format: str, limit: int, show_context:
         # Filter by file if specified - filter references, not the whole result dict
         if file:
             results["references"] = [
-                r for r in results["references"]
-                if r.get("ref_file", "").endswith(file)
+                r for r in results["references"] if r.get("ref_file", "").endswith(file)
             ]
 
     if format == "json":
@@ -193,9 +226,9 @@ def usages(symbol: str | None, root: str, format: str, limit: int, show_context:
             click.echo()
             for ref in references:
                 click.echo(f"  {ref['ref_file']}:{ref['ref_line']}")
-                if ref.get('context'):
+                if ref.get("context"):
                     # Truncate context if too long
-                    context = ref['context']
+                    context = ref["context"]
                     if len(context) > 200:
                         context = context[:200] + "..."
                     click.echo(f"    {context}")
@@ -281,11 +314,12 @@ def usings(file_path: str, root: str, format: str):
 
     if format == "json":
         import json
+
         output = {
-            'file': file_path_str,
-            'imports': list(mapping.imports),
-            'static_imports': list(mapping.static_imports),
-            'aliases': mapping.aliases
+            "file": file_path_str,
+            "imports": list(mapping.imports),
+            "static_imports": list(mapping.static_imports),
+            "aliases": mapping.aliases,
         }
         click.echo(json.dumps(output, indent=2))
     else:
@@ -309,16 +343,17 @@ def usings(file_path: str, root: str, format: str):
 @click.argument("symbol")
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
-@click.option("--file", type=str, help="File where symbol is used (helps resolve which definition when multiple exist)")
+@click.option(
+    "--file",
+    type=str,
+    help="File where symbol is used (helps resolve which definition when multiple exist)",
+)
 def definition(symbol: str, root: str, format: str, file: str | None):
     """Find symbol definition with import resolution."""
     config = load_config(Path(root))
 
     with SearchEngine(config=config) as engine:
-        result = engine.search_definition(
-            symbol_name=symbol,
-            reference_file=file
-        )
+        result = engine.search_definition(symbol_name=symbol, reference_file=file)
 
     if result is None:
         if format == "json":
@@ -342,7 +377,7 @@ def definition(symbol: str, root: str, format: str, file: str | None):
         click.echo(f"  Kind: {result['kind']}")
         click.echo(f"  File: {result['file_path']}")
         click.echo(f"  Lines: {result['line_start']}-{result['line_end']}")
-        if result.get('signature'):
+        if result.get("signature"):
             click.echo(f"  Signature: {result['signature']}")
 
 

@@ -20,7 +20,7 @@ class Indexer:
         config: Config | None = None,
         root: Path | None = None,
         use_parallel: bool = True,
-        max_workers: int | None = None
+        max_workers: int | None = None,
     ):
         if config:
             self.config = config
@@ -81,6 +81,7 @@ class Indexer:
         self.db.set_metadata("schema_version", "1")
 
         elapsed = time.time() - start_time
+        stats["elapsed_time"] = round(elapsed, 2)
         logger.info(f"Indexing complete in {elapsed:.2f}s: {stats}")
 
         return stats
@@ -93,11 +94,13 @@ class Indexer:
         start_time = time.time()
 
         # Collect all files
-        files_list = list(scan_files(
-            self.config.root,
-            self.config.includes,
-            self.config.excludes,
-        ))
+        files_list = list(
+            scan_files(
+                self.config.root,
+                self.config.includes,
+                self.config.excludes,
+            )
+        )
 
         # Progress callback
         def progress_callback(current: int, total: int):
@@ -108,9 +111,7 @@ class Indexer:
 
         # Create parallel indexer
         parallel_indexer = ParallelIndexer(
-            config=self.config,
-            max_workers=self.max_workers,
-            progress_callback=progress_callback
+            config=self.config, max_workers=self.max_workers, progress_callback=progress_callback
         )
 
         # Index files in parallel
@@ -121,6 +122,7 @@ class Indexer:
         self.db.set_metadata("schema_version", "1")
 
         elapsed = time.time() - start_time
+        stats["elapsed_time"] = round(elapsed, 2)
         logger.info(f"Parallel indexing complete in {elapsed:.2f}s: {stats}")
 
         return stats
@@ -192,6 +194,7 @@ class Indexer:
             stats["files_modified"] += modified_count
 
         elapsed = time.time() - start_time
+        stats["elapsed_time"] = round(elapsed, 2)
         logger.info(f"Update complete in {elapsed:.2f}s: {stats}")
 
         return stats
@@ -267,7 +270,7 @@ class Indexer:
         self.db.insert_references(parsed.references)
 
         # Save usings if available (C# specific)
-        if hasattr(parsed, 'namespace_mapping') and parsed.namespace_mapping:
+        if hasattr(parsed, "namespace_mapping") and parsed.namespace_mapping:
             self.db.save_usings(file_info.path, parsed.namespace_mapping)
 
     def _delete_file(self, path: str):
