@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-04-18
+
+### Fixed
+
+- **`top`/`usages` crash on older SQLite** - `GROUP_CONCAT(DISTINCT col, sep)` unsupported in SQLite < 3.44.0; replaced with subquery approach
+- **`--file` filter in `usages`** - Changed from `endswith()` to substring match (`in`) for consistency with `search --file`
+- **Duplicate search results** - Added `_deduplicate()` method applied across all search levels (exact, prefix, fuzzy, case-sensitive)
+- **Fuzzy search returning same results as prefix** - Removed `GROUP BY name` from `_fuzzy_search()`, now returns all file-specific matches
+- **`\r` in usages context** - Windows CRLF stripped from reference context at extraction time and display time
+- **Wildcard patterns in fuzzy search** - `*Controller` pattern now cleaned before LIKE matching
+
+### Added
+
+- **Warning for ambiguous symbols** - `usages` command warns (stderr) when symbol has 10+ definitions
+- Empty context lines skipped in `usages --show-context` output
+
 ## [0.4.0] - 2026-04-18
 
 ### Added

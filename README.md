@@ -1,8 +1,24 @@
 # AST Index
 
-**Version:** 0.4.0
+**Version:** 0.4.1
 
 A structural code search tool that indexes codebases using Abstract Syntax Tree (AST) analysis.
+
+## What's New in 0.4.1
+
+### Bug Fixes
+
+1. **Fixed `top`/`usages` crash** - `GROUP_CONCAT(DISTINCT)` incompatible with older SQLite versions, now uses subquery
+2. **Fixed `--file` filter in `usages`** - Was using `endswith` instead of substring match
+3. **Fixed duplicate search results** - Added deduplication across all search levels (exact, prefix, fuzzy)
+4. **Fixed fuzzy returning same results as prefix** - Removed `GROUP BY name` from fuzzy search
+5. **Fixed `\r` in usages context** - Windows CRLF now stripped from context lines
+6. **Fixed wildcard patterns in fuzzy search** - `*Controller` now works correctly
+
+### Improvements
+
+7. **Warning for ambiguous symbols** - Alerts when `usages` finds 10+ definitions of the same name
+8. **Empty context lines skipped** in `usages --show-context` output
 
 ## What's New in 0.4.0
 
