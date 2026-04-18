@@ -1,26 +1,41 @@
 # AST Index
 
-**Версия:** 0.1.1 (от 2026-03-24)
+**Version:** 0.4.0
 
 A structural code search tool that indexes codebases using Abstract Syntax Tree (AST) analysis.
 
-## ✨ Что нового в 0.1.1
+## What's New in 0.4.0
 
-### 🐛 Исправленные критические ошибки:
+### Critical Bug Fixes
 
-1. ✅ **Исправлен сбой `--show-context`** в команде `usages` - теперь можно просматривать контекст использований
-2. ✅ **Исправлен сбой `--file`** в команде `usages` - теперь фильтрация по файлу работает корректно
-3. ✅ **Исправлен сбой при `--show-context` + `--limit`** - комбинация опций больше не вызывает ошибок
+1. **Fixed duplicate symbols** - Rewrote parallel indexer to parse-parallel/write-sequential pattern, eliminating concurrent DB writes
+2. **Fixed doubled statistics** - Rebuild now uses bulk database clear instead of file-by-file deletion
+3. **Fixed "database is locked"** - Added `busy_timeout=5000` and single-threaded write transactions
+4. **Fixed inaccurate `top` results** - SQL now properly aggregates files per symbol with `GROUP_CONCAT`
 
-### 🔧 Улучшения:
+### New Features
 
-4. ✅ **Валидация отрицательных лимитов** - теперь `--limit -5` вызовет понятную ошибку
+5. **`file` command** - Show all symbols in a specific file (`ast-index file PATH`)
+6. **`--case-sensitive` flag** for search - Uses `COLLATE BINARY` for exact case matching
+7. **`--file` filter** for search - Filter results by file path substring
+8. **`--limit` for inheritance and usings** - Truncate results
+9. **`definition` shows all matches** - Returns list when multiple definitions exist
+10. **Symbol highlighting** in `usages --show-context` - Matches shown as `>>>symbol<<<`
+
+### Improvements
+
+11. **`executemany` for batch inserts** - Faster database writes
+12. **Batch transactions** of 100 files - Better write performance
+13. **Empty query validation** - Helpful error instead of random results
+14. **Wildcard documentation** - Help text explains shell expansion
 
 ## Features
 
 - Multi-language support (Python, JavaScript, TypeScript, C#)
 - Structural code search (find functions, classes, methods by name/pattern)
+- Case-sensitive search for case-sensitive languages
 - Symbol usage tracking (find where symbols are referenced/called)
+- File-level symbol listing
 - SQLite-based index with FTS5 full-text search
 - Incremental indexing with file change detection
 - Inheritance hierarchy analysis
@@ -39,7 +54,7 @@ pip install -e .
 
 ```bash
 cd /path/to/AstIndex/dist
-pip install ast_index-0.1.1-py3-none-any.whl
+pip install ast_index-0.4.0-py3-none-any.whl
 ```
 
 ## Usage
@@ -51,20 +66,29 @@ ast-index index
 # Search for symbols
 ast-index search "SymbolName"
 
+# Case-sensitive search (for C# and other case-sensitive languages)
+ast-index search "ToString" --case-sensitive
+
+# Search in specific files
+ast-index search "Service" --file "Controllers/"
+
 # Search for classes
 ast-index class "ClassName"
 
 # Find all usages of a symbol
 ast-index usages "SymbolName"
 
-# Find usages with context (исправлено в 0.1.1!)
-ast-index usages "SymbolName" --show-context
+# Find usages with context and highlighting
+ast-index usages --show-context "SymbolName"
 
-# Filter usages by file (исправлено в 0.1.1!)
+# Filter usages by file
 ast-index usages "SymbolName" --file "path/to/file.cs"
 
-# Limit results with validation (новое в 0.1.1!)
-ast-index search "Query" --limit 10
+# Show all symbols in a file
+ast-index file src/UserService.cs
+
+# Find symbol definition (shows all matches if multiple)
+ast-index definition "SymbolName"
 
 # Analyze inheritance
 ast-index inheritance "BaseClass" --direction children
@@ -72,14 +96,8 @@ ast-index inheritance "BaseClass" --direction children
 # View index statistics
 ast-index stats
 
-# Find usages of a symbol
-ast-index usages UserRepository
-
-# Find usages with context
-ast-index usages --show-context UserRepository
-
-# Find usages in specific file
-ast-index usages --file UserService.cs UserRepository
+# Most referenced symbols (aggregated by file)
+ast-index top --limit 20
 ```
 
 ## Development
@@ -104,21 +122,22 @@ AST Index includes a **usages** command that finds where symbols are referenced 
 
 ### What Works Well
 
-- ✅ Finds CamelCase type references (classes, interfaces)
-- ✅ Finds function/method calls
-- ✅ Filters out language keywords and standard types
-- ✅ Excludes locally-defined symbols
-- ✅ Removes comments and string literals from search
-- ✅ Shows context lines for each reference
+- Finds CamelCase type references (classes, interfaces)
+- Finds function/method calls
+- Filters out language keywords and standard types
+- Excludes locally-defined symbols
+- Removes comments and string literals from search
+- Shows context lines for each reference with symbol highlighting
+- Case-sensitive search for case-sensitive languages
 
 ### C# Enhancements
 
 For C# projects, AST Index provides enhanced reference extraction:
 
-- ✅ **Using Directives Analysis**: Extracts and stores `using` statements (System, System.Collections.Generic, etc.)
-- ✅ **Generic Types**: Extracts references to generic types like `List<T>`, `Dictionary<K,V>`
-- ✅ **Context-Aware Filtering**: Excludes symbols from XML documentation (`/// <summary>`), attributes (`[Obsolete]`), and string interpolation (`$"{var}"`)
-- ✅ **LINQ Extension Methods**: Identifies common LINQ methods (`Where`, `Select`, `ToList`, etc.)
+- **Using Directives Analysis**: Extracts and stores `using` statements
+- **Generic Types**: Extracts references to generic types like `List<T>`, `Dictionary<K,V>`
+- **Context-Aware Filtering**: Excludes symbols from XML docs, attributes, and string interpolation
+- **LINQ Extension Methods**: Identifies common LINQ methods
 
 **Show using directives for a C# file:**
 ```bash
@@ -129,26 +148,9 @@ ast-index usings Models/UserRepository.cs
 
 The regex-based approach has some limitations:
 
-- ⚠️ **False positives**: May find symbol references in string literals or comments (though we try to exclude these)
-- ⚠️ **No import resolution**: Doesn't resolve imports/using statements, so references may point to the wrong definition
-- ⚠️ **No scope awareness**: Doesn't understand variable scope or namespaces
-- ⚠️ **Language-specific patterns**: Works best with CamelCase conventions; snake_case symbols without calls may be missed
-
-### Example Output
-
-```bash
-$ ast-index usages --show-context UserRepository
-
-Usages of UserRepository (3 found):
-
-  src/UserService.cs:15
-      var repo = new UserRepository();
-
-  src/UserService.cs:16
-      repo.GetData();
-
-  tests/UserServiceTests.cs:42
-      var mockRepo = new Mock<UserRepository>();
-```
+- **False positives**: May find symbol references in string literals or comments
+- **No import resolution**: Doesn't resolve imports/using statements for reference matching
+- **No scope awareness**: Doesn't understand variable scope or namespaces
+- **Language-specific patterns**: Works best with CamelCase conventions
 
 For more accurate results in complex scenarios, consider using language server protocol (LSP) based tools.

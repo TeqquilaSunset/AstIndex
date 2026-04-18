@@ -20,6 +20,7 @@ class Database:
         # Enable WAL mode for better concurrency
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
+        self._conn.execute("PRAGMA busy_timeout=5000")
 
         self._create_tables()
         self._create_triggers()
@@ -30,7 +31,7 @@ class Database:
                 key TEXT PRIMARY KEY,
                 value TEXT
             );
-            
+
             CREATE TABLE IF NOT EXISTS files (
                 path TEXT PRIMARY KEY,
                 language TEXT NOT NULL,
@@ -38,7 +39,7 @@ class Database:
                 last_modified REAL NOT NULL,
                 size INTEGER NOT NULL
             );
-            
+
             CREATE TABLE IF NOT EXISTS symbols (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
@@ -54,13 +55,13 @@ class Database:
                 scope TEXT,
                 FOREIGN KEY (file_path) REFERENCES files(path)
             );
-            
+
             CREATE VIRTUAL TABLE IF NOT EXISTS symbols_fts USING fts5(
                 name,
                 content='symbols',
                 content_rowid='id'
             );
-            
+
             CREATE TABLE IF NOT EXISTS inheritance (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 child_symbol TEXT NOT NULL,
@@ -69,7 +70,7 @@ class Database:
                 parent_file TEXT,
                 kind TEXT NOT NULL
             );
-            
+
             CREATE TABLE IF NOT EXISTS refs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 symbol_name TEXT NOT NULL,
@@ -80,7 +81,7 @@ class Database:
                 ref_kind TEXT NOT NULL,
                 context TEXT
             );
-            
+
             CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
             CREATE INDEX IF NOT EXISTS idx_symbols_kind ON symbols(kind);
             CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file_path);
@@ -107,11 +108,11 @@ class Database:
             CREATE TRIGGER IF NOT EXISTS symbols_ai AFTER INSERT ON symbols BEGIN
                 INSERT INTO symbols_fts(rowid, name) VALUES (new.id, new.name);
             END;
-            
+
             CREATE TRIGGER IF NOT EXISTS symbols_ad AFTER DELETE ON symbols BEGIN
                 INSERT INTO symbols_fts(symbols_fts, rowid, name) VALUES('delete', old.id, old.name);
             END;
-            
+
             CREATE TRIGGER IF NOT EXISTS symbols_au AFTER UPDATE ON symbols BEGIN
                 INSERT INTO symbols_fts(symbols_fts, rowid, name) VALUES('delete', old.id, old.name);
                 INSERT INTO symbols_fts(rowid, name) VALUES (new.id, new.name);
@@ -157,7 +158,7 @@ class Database:
     def insert_symbol(self, symbol: Symbol) -> int:
         cursor = self._conn.execute(
             """
-            INSERT INTO symbols (name, kind, file_path, line_start, line_end, 
+            INSERT INTO symbols (name, kind, file_path, line_start, line_end,
                                  col_start, col_end, signature, docstring, parent, scope)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
@@ -178,8 +179,31 @@ class Database:
         return cursor.lastrowid
 
     def insert_symbols(self, symbols: list[Symbol]) -> None:
-        for symbol in symbols:
-            self.insert_symbol(symbol)
+        if not symbols:
+            return
+        self._conn.executemany(
+            """
+            INSERT INTO symbols (name, kind, file_path, line_start, line_end,
+                                 col_start, col_end, signature, docstring, parent, scope)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+            [
+                (
+                    s.name,
+                    s.kind,
+                    s.file_path,
+                    s.line_start,
+                    s.line_end,
+                    s.col_start,
+                    s.col_end,
+                    s.signature,
+                    s.docstring,
+                    s.parent,
+                    s.scope,
+                )
+                for s in symbols
+            ],
+        )
 
     def delete_symbols_for_file(self, file_path: str) -> None:
         self._conn.execute("DELETE FROM symbols WHERE file_path = ?", (file_path,))
@@ -221,8 +245,18 @@ class Database:
         )
 
     def insert_inheritances(self, inheritances: list[Inheritance]) -> None:
-        for inh in inheritances:
-            self.insert_inheritance(inh)
+        if not inheritances:
+            return
+        self._conn.executemany(
+            """
+            INSERT INTO inheritance (child_symbol, child_file, parent_symbol, parent_file, kind)
+            VALUES (?, ?, ?, ?, ?)
+        """,
+            [
+                (i.child_symbol, i.child_file, i.parent_symbol, i.parent_file, i.kind)
+                for i in inheritances
+            ],
+        )
 
     def delete_inheritance_for_file(self, file_path: str) -> None:
         self._conn.execute("DELETE FROM inheritance WHERE child_file = ?", (file_path,))
@@ -257,8 +291,26 @@ class Database:
         )
 
     def insert_references(self, references: list[Reference]) -> None:
-        for ref in references:
-            self.insert_reference(ref)
+        if not references:
+            return
+        self._conn.executemany(
+            """
+            INSERT INTO refs (symbol_name, symbol_file, ref_file, ref_line, ref_col, ref_kind, context)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+            [
+                (
+                    r.symbol_name,
+                    r.symbol_file,
+                    r.ref_file,
+                    r.ref_line,
+                    r.ref_col,
+                    r.ref_kind,
+                    r.context,
+                )
+                for r in references
+            ],
+        )
 
     def delete_refs_for_file(self, file_path: str) -> None:
         self._conn.execute("DELETE FROM refs WHERE ref_file = ?", (file_path,))
@@ -325,22 +377,20 @@ class Database:
         for namespace in namespace_mapping.imports:
             cursor.execute(
                 "INSERT INTO usings (file_path, namespace, is_static) VALUES (?, ?, 0)",
-                (file_path, namespace)
+                (file_path, namespace),
             )
 
         for static_type in namespace_mapping.static_imports:
             cursor.execute(
                 "INSERT INTO usings (file_path, namespace, is_static) VALUES (?, ?, 1)",
-                (file_path, static_type)
+                (file_path, static_type),
             )
 
         for alias, target_ns in namespace_mapping.aliases.items():
             cursor.execute(
                 "INSERT INTO usings (file_path, alias, namespace, is_static) VALUES (?, ?, ?, 0)",
-                (file_path, alias, target_ns)
+                (file_path, alias, target_ns),
             )
-
-        self._conn.commit()
 
     def get_usings_for_file(self, file_path: str):
         """
@@ -356,8 +406,7 @@ class Database:
 
         cursor = self._conn.cursor()
         cursor.execute(
-            "SELECT alias, namespace, is_static FROM usings WHERE file_path = ?",
-            (file_path,)
+            "SELECT alias, namespace, is_static FROM usings WHERE file_path = ?", (file_path,)
         )
 
         aliases = {}
@@ -374,10 +423,7 @@ class Database:
                 imports.add(namespace)
 
         return NamespaceMapping(
-            file_path=file_path,
-            aliases=aliases,
-            imports=imports,
-            static_imports=static_imports
+            file_path=file_path, aliases=aliases, imports=imports, static_imports=static_imports
         )
 
     def delete_usings_for_file(self, file_path: str):
@@ -401,15 +447,11 @@ class Database:
         Returns:
             Список словарей с информацией о ссылках
         """
-        rows = self._conn.execute(
-            "SELECT * FROM refs WHERE ref_file = ?", (file_path,)
-        ).fetchall()
+        rows = self._conn.execute("SELECT * FROM refs WHERE ref_file = ?", (file_path,)).fetchall()
         return [dict(row) for row in rows]
 
     def get_symbols_by_name_and_namespace(
-        self,
-        name: str,
-        namespace: str | None = None
+        self, name: str, namespace: str | None = None
     ) -> list[dict[str, Any]]:
         """
         Получить символы по имени с опциональной фильтрацией по namespace.
@@ -427,12 +469,11 @@ class Database:
                    WHERE name = ? AND scope LIKE ?
                    ORDER BY scope
                 """,
-                (name, f"%{namespace}%")
+                (name, f"%{namespace}%"),
             ).fetchall()
         else:
             rows = self._conn.execute(
-                "SELECT * FROM symbols WHERE name = ? ORDER BY scope",
-                (name,)
+                "SELECT * FROM symbols WHERE name = ? ORDER BY scope", (name,)
             ).fetchall()
 
         return [dict(row) for row in rows]

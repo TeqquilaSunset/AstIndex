@@ -23,7 +23,13 @@ class SearchEngine:
             self._resolver = SymbolResolver(self.db)
         return self._resolver
 
-    def search(self, query: str | None, limit: int = 50, level: str = "prefix") -> list[dict[str, Any]]:
+    def search(
+        self,
+        query: str | None,
+        limit: int = 50,
+        level: str = "prefix",
+        case_sensitive: bool = False,
+    ) -> list[dict[str, Any]]:
         """
         Search for symbols by name/pattern.
 
@@ -31,16 +37,29 @@ class SearchEngine:
             query: Symbol name or pattern. If None, returns all symbols.
             limit: Maximum number of results.
             level: Search level (exact, prefix, fuzzy).
+            case_sensitive: Whether search should be case-sensitive.
 
         Returns:
             List of matching symbols.
         """
         if query is None:
-            # Return all symbols
             cursor = self.db._conn.execute(
                 "SELECT * FROM symbols ORDER BY name LIMIT ?",
                 (limit,),
             )
+            return [dict(row) for row in cursor.fetchall()]
+
+        if case_sensitive:
+            if level == "exact":
+                cursor = self.db._conn.execute(
+                    "SELECT * FROM symbols WHERE name = ? COLLATE BINARY LIMIT ?",
+                    (query, limit),
+                )
+            else:
+                cursor = self.db._conn.execute(
+                    "SELECT * FROM symbols WHERE name LIKE ? COLLATE BINARY LIMIT ?",
+                    (f"%{query}%", limit),
+                )
             return [dict(row) for row in cursor.fetchall()]
 
         if level == "exact":
@@ -102,7 +121,7 @@ class SearchEngine:
             )
         return [dict(row) for row in cursor.fetchall()]
 
-    def search_usages(self, symbol_name: str, limit: int = 100) -> dict[str, Any]:
+    def search_usages(self, symbol_name: str, limit: int = 500) -> dict[str, Any]:
         usages = self.db.get_usages(symbol_name)[:limit]
         definitions = self.db.get_symbols_by_name(symbol_name)
         return {
@@ -136,62 +155,43 @@ class SearchEngine:
     def search_definition(
         self,
         symbol_name: str,
-        reference_file: str | None = None
-    ) -> dict[str, Any] | None:
-        """
-        Найти определение символа с разрешением импортов.
-
-        Args:
-            symbol_name: Имя символа
-            reference_file: Опционально: файл, где используется символ
-
-        Returns:
-            Словарь с информацией о символе или None
-        """
-        # Если указан файл - используем резолвер
+        reference_file: str | None = None,
+    ) -> dict[str, Any] | list[dict[str, Any]] | None:
         if reference_file:
             resolver = self._get_resolver()
             return resolver.resolve_symbol(symbol_name, reference_file)
 
-        # Иначе - ищем все символы с таким именем
         symbols = self.db.get_symbols_by_name(symbol_name)
 
         if not symbols:
             return None
 
-        # Если один символ - возвращаем его
         if len(symbols) == 1:
             return symbols[0]
 
-        # Если несколько - возвращаем первый (class/interface приоритет)
-        for symbol in symbols:
-            if symbol["kind"] in ("class", "interface"):
-                return symbol
-
-        return symbols[0]
+        return symbols
 
     def get_top_symbols(self, limit: int = 50) -> list[dict[str, Any]]:
-        """
-        Get most referenced symbols.
-
-        Args:
-            limit: Maximum number of results.
-
-        Returns:
-            List of symbols with reference counts, sorted by usage.
-        """
         cursor = self.db._conn.execute(
             """
-            SELECT s.*, COUNT(r.id) as reference_count
+            SELECT s.name, s.kind,
+                   GROUP_CONCAT(DISTINCT s.file_path, '||') as files,
+                   COUNT(r.id) as reference_count
             FROM symbols s
             LEFT JOIN refs r ON s.name = r.symbol_name
             GROUP BY s.name, s.kind
+            HAVING reference_count > 0
             ORDER BY reference_count DESC, s.name
             LIMIT ?
             """,
             (limit,),
         )
-        return [dict(row) for row in cursor.fetchall()]
+        results = []
+        for row in cursor.fetchall():
+            d = dict(row)
+            d["file_paths"] = d.pop("files", "").split("||") if d.get("files") else []
+            results.append(d)
+        return results
 
     def get_all_kinds(self) -> list[dict[str, Any]]:
         """

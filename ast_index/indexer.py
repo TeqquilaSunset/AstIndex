@@ -280,9 +280,7 @@ class Indexer:
         self.db.delete_file(path)
 
     def _clear_all(self):
-        all_files = self.db.get_all_files()
-        for f in all_files:
-            self._delete_file(f["path"])
+        self.db._clear_all()
 
     def _merge_stats(self, stats: dict[str, int], batch_stats: dict[str, int]):
         for key, value in batch_stats.items():

@@ -39,64 +39,43 @@ class TestParallelIndexer:
 
         assert indexer.progress_callback == progress_callback
 
-    def test_parse_file_with_db(self, temp_dir, sample_csharp_file):
-        """Test parsing file with database connection."""
-        from ast_index.database import Database
-        from ast_index.utils.file_utils import djb2_hash
-
-        db_path = temp_dir / "test.db"
-
-        # Create new config with custom db_path
+    def test_parse_file_returns_parsed_file(self, temp_dir, sample_csharp_file):
+        """Test _parse_file returns ParsedFile with symbols."""
         config = Config(root=temp_dir)
-        # Use default db_path location (will be computed from config)
-
-        # Create database schema
-        db = Database(config.db_path)
-
         indexer = ParallelIndexer(config=config)
 
-        # Parse file
-        result = indexer._parse_file_with_db(
-            sample_csharp_file,
-            "csharp"
-        )
+        result = indexer._parse_file(sample_csharp_file, "csharp")
 
         assert result is not None
-        assert result["files_indexed"] == 1
-        assert result["symbols_indexed"] > 0
+        assert result.file_info is not None
+        assert len(result.symbols) > 0
 
-    def test_merge_stats(self, temp_dir):
-        """Test stats merging."""
+    def test_write_batch_stores_to_db(self, temp_dir, sample_csharp_file):
+        """Test _write_batch writes parsed results to database."""
+        from ast_index.database import Database
+
         config = Config(root=temp_dir)
         indexer = ParallelIndexer(config=config)
 
-        total = {
-            "files_indexed": 0,
-            "symbols_indexed": 0,
-            "inheritances_indexed": 0,
-            "references_indexed": 0,
-            "errors": 0,
-        }
+        parsed = indexer._parse_file(sample_csharp_file, "csharp")
+        assert parsed is not None
 
-        partial = {
-            "files_indexed": 5,
-            "symbols_indexed": 50,
-            "inheritances_indexed": 3,
-            "references_indexed": 100,
-        }
+        db = Database(config.db_path)
+        try:
+            stats = indexer._write_batch(db, [parsed])
+        finally:
+            db.close()
 
-        indexer._merge_stats(total, partial)
-
-        assert total["files_indexed"] == 5
-        assert total["symbols_indexed"] == 50
-        assert total["inheritances_indexed"] == 3
-        assert total["references_indexed"] == 100
+        assert stats["files_indexed"] == 1
+        assert stats["symbols_indexed"] > 0
 
 
 class TestParallelIndexingIntegration:
     """Integration tests for parallel indexing."""
 
-    def test_parallel_vs_sequential_consistency(self, temp_dir, sample_python_file, sample_csharp_file):
+    def test_parallel_vs_sequential_consistency(
+        self, temp_dir, sample_python_file, sample_csharp_file
+    ):
         """Test that parallel and sequential indexing produce same results."""
         from ast_index.indexer import Indexer
 
@@ -108,6 +87,7 @@ class TestParallelIndexingIntegration:
 
         # Clear database
         from ast_index.database import Database
+
         db = Database(config.db_path)
         db._clear_all()
 

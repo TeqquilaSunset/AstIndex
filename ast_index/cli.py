@@ -134,12 +134,36 @@ def rebuild(root: str, format: str):
     help="Search level",
 )
 @click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
-def search(query: str | None, root: str, format: str, level: str, limit: int):
-    """Search for symbols by name. If QUERY is not provided, lists all symbols."""
+@click.option("--file", "file_filter", type=str, help="Filter results by file path")
+@click.option("--case-sensitive", is_flag=True, help="Case-sensitive search")
+def search(
+    query: str | None,
+    root: str,
+    format: str,
+    level: str,
+    limit: int,
+    file_filter: str | None,
+    case_sensitive: bool,
+):
+    """Search for symbols by name. If QUERY is not provided, lists all symbols.
+
+    Use quotes around patterns with wildcards to prevent shell expansion:
+      ast-index search "*Service"
+      ast-index search "get*"
+    """
+    if query is not None and not query.strip():
+        click.echo(
+            "Error: Query cannot be empty. Use 'search' without arguments to list all symbols."
+        )
+        return
+
     config = load_config(Path(root))
 
     with SearchEngine(config=config) as engine:
-        results = engine.search(query, limit=limit, level=level)
+        results = engine.search(query, limit=limit, level=level, case_sensitive=case_sensitive)
+
+    if file_filter:
+        results = [r for r in results if file_filter in r.get("file_path", "")]
 
     if query is None:
         output_result(results, format, f"Found {len(results)} symbols (all)")
@@ -169,7 +193,7 @@ def search_class(name: str | None, root: str, format: str, limit: int):
 @click.argument("symbol", required=False, default=None)
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
-@click.option("--limit", type=int, default=100, help="Maximum results", callback=validate_limit)
+@click.option("--limit", type=int, default=500, help="Maximum results", callback=validate_limit)
 @click.option("--show-context", is_flag=True, help="Show context of each reference")
 @click.option("--file", type=str, help="Filter results by file path")
 def usages(symbol: str | None, root: str, format: str, limit: int, show_context: bool, file: str):
@@ -188,9 +212,11 @@ def usages(symbol: str | None, root: str, format: str, limit: int, show_context:
                 click.echo()
                 for item in results:
                     ref_count = item.get("reference_count", 0)
-                    click.echo(
-                        f"  {ref_count:4d} - {item['name']} ({item['kind']}) in {item['file_path']}"
-                    )
+                    files = item.get("file_paths", [])
+                    files_str = ", ".join(files[:3])
+                    if len(files) > 3:
+                        files_str += f" (+{len(files) - 3} more)"
+                    click.echo(f"  {ref_count:4d} - {item['name']} ({item['kind']}) [{files_str}]")
             return
 
         # Original behavior when symbol is provided
@@ -227,11 +253,19 @@ def usages(symbol: str | None, root: str, format: str, limit: int, show_context:
             for ref in references:
                 click.echo(f"  {ref['ref_file']}:{ref['ref_line']}")
                 if ref.get("context"):
-                    # Truncate context if too long
                     context = ref["context"]
                     if len(context) > 200:
                         context = context[:200] + "..."
-                    click.echo(f"    {context}")
+                    context_lower = context.lower()
+                    sym_lower = symbol.lower()
+                    idx = context_lower.find(sym_lower)
+                    if idx >= 0:
+                        before = context[:idx]
+                        match = context[idx : idx + len(symbol)]
+                        after = context[idx + len(symbol) :]
+                        click.echo(f"    {before}>>>{match}<<<{after}")
+                    else:
+                        click.echo(f"    {context}")
                 click.echo()
     else:
         output_result(results, format, f"Usages of {symbol}")
@@ -247,12 +281,18 @@ def usages(symbol: str | None, root: str, format: str, limit: int, show_context:
     default="both",
     help="Direction",
 )
-def inheritance(symbol: str, root: str, format: str, direction: str):
+@click.option(
+    "--limit", type=int, default=100, help="Maximum results per direction", callback=validate_limit
+)
+def inheritance(symbol: str, root: str, format: str, direction: str, limit: int):
     """Search inheritance hierarchy."""
     config = load_config(Path(root))
 
     with SearchEngine(config=config) as engine:
         results = engine.search_inheritance(symbol, direction=direction)
+
+    results["children"] = results["children"][:limit]
+    results["parents"] = results["parents"][:limit]
 
     output_result(results, format, f"Inheritance for {symbol}")
 
@@ -289,7 +329,10 @@ def init(root: str):
 @click.argument("file_path", type=click.Path(exists=True))
 @click.option("--root", type=click.Path(exists=True), help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
-def usings(file_path: str, root: str, format: str):
+@click.option(
+    "--limit", type=int, default=100, help="Maximum results per category", callback=validate_limit
+)
+def usings(file_path: str, root: str, format: str, limit: int):
     """Показать using директивы для C# файла."""
     from pathlib import Path
 
@@ -317,25 +360,25 @@ def usings(file_path: str, root: str, format: str):
 
         output = {
             "file": file_path_str,
-            "imports": list(mapping.imports),
-            "static_imports": list(mapping.static_imports),
-            "aliases": mapping.aliases,
+            "imports": list(mapping.imports)[:limit],
+            "static_imports": list(mapping.static_imports)[:limit],
+            "aliases": dict(sorted(mapping.aliases.items())[:limit]),
         }
         click.echo(json.dumps(output, indent=2))
     else:
         click.echo(f"Usings for {file_path}:")
         click.echo("\nImports:")
-        for imp in sorted(mapping.imports):
+        for imp in sorted(mapping.imports)[:limit]:
             click.echo(f"  {imp}")
 
         if mapping.static_imports:
             click.echo("\nStatic Imports:")
-            for imp in sorted(mapping.static_imports):
+            for imp in sorted(mapping.static_imports)[:limit]:
                 click.echo(f"  {imp}")
 
         if mapping.aliases:
             click.echo("\nAliases:")
-            for alias, target in sorted(mapping.aliases.items()):
+            for alias, target in sorted(mapping.aliases.items())[:limit]:
                 click.echo(f"  {alias} = {target}")
 
 
@@ -362,23 +405,44 @@ def definition(symbol: str, root: str, format: str, file: str | None):
             click.echo(f"Definition not found: {symbol}")
         return
 
-    if format == "json":
-        output = {
-            "name": result["name"],
-            "kind": result["kind"],
-            "file_path": result["file_path"],
-            "line_start": result["line_start"],
-            "line_end": result["line_end"],
-            "signature": result.get("signature"),
-        }
-        click.echo(json.dumps(output, indent=2, default=str))
+    if isinstance(result, list):
+        if format == "json":
+            output = [
+                {
+                    "name": r["name"],
+                    "kind": r["kind"],
+                    "file_path": r["file_path"],
+                    "line_start": r["line_start"],
+                    "line_end": r["line_end"],
+                    "signature": r.get("signature"),
+                }
+                for r in result
+            ]
+            click.echo(json.dumps(output, indent=2, default=str))
+        else:
+            click.echo(f"Found {len(result)} definitions for {symbol}:")
+            for r in result:
+                click.echo(f"  {r['kind']} {r['name']} - {r['file_path']}:{r['line_start']}")
+                if r.get("signature"):
+                    click.echo(f"    Signature: {r['signature']}")
     else:
-        click.echo(f"Definition of {symbol}:")
-        click.echo(f"  Kind: {result['kind']}")
-        click.echo(f"  File: {result['file_path']}")
-        click.echo(f"  Lines: {result['line_start']}-{result['line_end']}")
-        if result.get("signature"):
-            click.echo(f"  Signature: {result['signature']}")
+        if format == "json":
+            output = {
+                "name": result["name"],
+                "kind": result["kind"],
+                "file_path": result["file_path"],
+                "line_start": result["line_start"],
+                "line_end": result["line_end"],
+                "signature": result.get("signature"),
+            }
+            click.echo(json.dumps(output, indent=2, default=str))
+        else:
+            click.echo(f"Definition of {symbol}:")
+            click.echo(f"  Kind: {result['kind']}")
+            click.echo(f"  File: {result['file_path']}")
+            click.echo(f"  Lines: {result['line_start']}-{result['line_end']}")
+            if result.get("signature"):
+                click.echo(f"  Signature: {result['signature']}")
 
 
 @cli.command()
@@ -455,7 +519,11 @@ def top(root: str, format: str, limit: int):
         click.echo()
         for item in results:
             ref_count = item.get("reference_count", 0)
-            click.echo(f"  {ref_count:4d} - {item['name']} ({item['kind']}) in {item['file_path']}")
+            files = item.get("file_paths", [])
+            files_str = ", ".join(files[:3])
+            if len(files) > 3:
+                files_str += f" (+{len(files) - 3} more)"
+            click.echo(f"  {ref_count:4d} - {item['name']} ({item['kind']}) [{files_str}]")
 
 
 @cli.command()
@@ -475,6 +543,36 @@ def kinds(root: str, format: str):
         click.echo()
         for item in results:
             click.echo(f"  {item['kind']:20s} - {item['count']:4d} symbols")
+
+
+@cli.command("file")
+@click.argument("file_path", type=click.Path(exists=True))
+@click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
+@click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
+@click.option("--limit", type=int, default=200, help="Maximum results", callback=validate_limit)
+def file_symbols(file_path: str, root: str, format: str, limit: int):
+    """Show all symbols in a specific file."""
+    config = load_config(Path(root))
+
+    resolved_path = str(Path(file_path).resolve())
+
+    with SearchEngine(config=config) as engine:
+        results = engine.search_in_file(resolved_path, limit=limit)
+
+    if format == "json":
+        output_result(results, format, f"Found {len(results)} symbols in {file_path}")
+    else:
+        click.echo(f"Symbols in {file_path} ({len(results)} found):")
+        click.echo()
+        for item in results:
+            kind = item.get("kind", "unknown")
+            name = item.get("name", "")
+            line = item.get("line_start", 0)
+            parent = item.get("parent")
+            if parent:
+                click.echo(f"  {line:5d}  {kind:12s}  {parent}.{name}")
+            else:
+                click.echo(f"  {line:5d}  {kind:12s}  {name}")
 
 
 def main():

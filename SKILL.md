@@ -18,6 +18,8 @@ Use AST Index when you need to:
 - Understand inheritance hierarchies
 - Get statistics about codebase structure
 - Search for symbols by pattern (regex-style)
+- View all symbols in a specific file
+- Find symbol definitions with import resolution
 
 **NOT for:**
 - Text-based content search (use grep/ripgrep)
@@ -42,9 +44,9 @@ Creates `.ast-index.yaml` with default configuration for the project.
 
 ### 2. **index** - Create full project index
 ```bash
-ast-index index [--root PATH] [--format text|json] [--jobs N]
+ast-index index [--root PATH] [--format text|json] [--jobs N] [--no-parallel]
 ```
-Performs complete indexing of all files in the project. Use for first-time indexing or after major changes.
+Performs complete indexing of all files in the project. Use for first-time indexing or after major changes. Supports parallel processing (default) with `--jobs N` to control worker count.
 
 ### 3. **update** - Incremental update (changed files only)
 ```bash
@@ -60,20 +62,28 @@ Clears existing index and performs complete reindexing. Use after major refactor
 
 ### 5. **search** - Find symbols by name/pattern
 ```bash
-ast-index search [QUERY] [--level exact|prefix|fuzzy] [--limit N]
+ast-index search [QUERY] [--level exact|prefix|fuzzy] [--limit N] [--case-sensitive] [--file PATH]
 ```
-If QUERY is not provided, lists all symbols.
+If QUERY is not provided, lists all symbols. Empty queries are rejected with a helpful message.
+
+Options:
+- `--case-sensitive` - Case-sensitive matching (uses COLLATE BINARY)
+- `--file PATH` - Filter results by file path substring
+- Use quotes around wildcard patterns: `ast-index search "*Service"`
 
 ### 6. **usages** - Find all symbol usages/references
 ```bash
 ast-index usages [SYMBOL] [--show-context] [--file PATH] [--limit N]
 ```
-If SYMBOL is not provided, shows most referenced symbols (top-N).
+If SYMBOL is not provided, shows most referenced symbols (top-N). Default limit is 500.
+
+With `--show-context`, matching symbols are highlighted with `>>>symbol<<<` in the output.
 
 ### 7. **inheritance** - Show inheritance hierarchy
 ```bash
-ast-index inheritance SYMBOL [--direction children|parents|both]
+ast-index inheritance SYMBOL [--direction children|parents|both] [--limit N]
 ```
+Shows inheritance relationships. Use `--limit` to truncate results (default: 100).
 
 ### 8. **stats** - Index statistics
 ```bash
@@ -84,6 +94,7 @@ ast-index stats
 ```bash
 ast-index definition SYMBOL [--file PATH]
 ```
+Shows all definitions when multiple matches exist. Use `--file` to resolve which definition when multiple exist.
 
 ### 10. **class** - Search for class/interface definitions
 ```bash
@@ -91,42 +102,47 @@ ast-index class [NAME] [--limit N]
 ```
 If NAME is not provided, lists all classes.
 
-### 11. **methods** - List all methods
+### 11. **file** - Show all symbols in a specific file
+```bash
+ast-index file FILE_PATH [--root PATH] [--format text|json] [--limit N]
+```
+Lists all symbols in a file with name, kind, line number, and parent.
+
+### 12. **methods** - List all methods
 ```bash
 ast-index methods [--limit N]
 ```
 
-### 12. **functions** - List all functions
+### 13. **functions** - List all functions
 ```bash
 ast-index functions [--limit N]
 ```
 
-### 13. **interfaces** - List all interfaces
+### 14. **interfaces** - List all interfaces
 ```bash
 ast-index interfaces [--limit N]
 ```
 
-### 14. **types** - List all type aliases
+### 15. **types** - List all type aliases
 ```bash
 ast-index types [--limit N]
 ```
 
-### 15. **top** - Show most referenced symbols
+### 16. **top** - Show most referenced symbols
 ```bash
 ast-index top [--limit N]
 ```
+Shows symbols with highest reference count, aggregated across all files.
 
-### 16. **kinds** - List all symbol kinds in project
+### 17. **kinds** - List all symbol kinds in project
 ```bash
 ast-index kinds
 ```
-Finds the definition of a symbol. Use `--file` to specify which file is using the symbol (helps resolve which definition when multiple exist).
 
-### 10. **class** - Search for class/interface definitions
+### 18. **usings** - Show using directives for C# files
 ```bash
-ast-index class [NAME] [--limit N]
+ast-index usings FILE_PATH [--root PATH] [--format text|json] [--limit N]
 ```
-If NAME is not provided, lists all classes in the index.
 
 ## Common Workflows
 
@@ -138,7 +154,7 @@ If NAME is not provided, lists all classes in the index.
 # Basic usage search
 ast-index usages methodName
 
-# With context (shows actual code lines)
+# With context (shows actual code lines with highlighting)
 ast-index usages --show-context methodName
 
 # Filter by specific file
@@ -171,14 +187,32 @@ ast-index inheritance UserService --direction both
 # Exact match
 ast-index search "UserService"
 
+# Case-sensitive exact match
+ast-index search "UserService" --case-sensitive
+
 # Prefix search (UserService, UserValidator, etc.)
 ast-index search "User*" --level prefix
 
 # Fuzzy search (contains "User")
 ast-index search "User" --level fuzzy
 
+# Search only in specific files
+ast-index search "Service" --file "Controllers/"
+
 # Pattern search (regex)
 ast-index search "get.*User" --level fuzzy
+```
+
+### Viewing Symbols in a File
+
+**Task:** See all symbols defined in a file
+
+```bash
+# List all symbols
+ast-index file src/UserService.cs
+
+# JSON output
+ast-index file src/UserService.cs --format json
 ```
 
 ### Codebase Exploration
@@ -189,23 +223,17 @@ ast-index search "get.*User" --level fuzzy
 # Get statistics
 ast-index stats
 
-# Output:
-# files: 150
-# symbols: 2340
-# inheritances: 85
-# references: 5670
-
 # List all classes (first 50)
 ast-index class
-
-# List all classes with custom limit
-ast-index class --limit 100
 
 # Find all classes in a module
 ast-index search "Repository*" --level prefix
 
 # Find all test files/classes
 ast-index search "*Test*" --level fuzzy
+
+# Most referenced symbols (aggregated by file)
+ast-index top --limit 20
 ```
 
 ### Impact Analysis
@@ -221,6 +249,9 @@ ast-index inheritance SymbolName --direction both
 
 # 3. Search for related symbols
 ast-index search "SymbolName.*" --level prefix
+
+# 4. Find all definitions
+ast-index definition SymbolName
 ```
 
 ## Best Practices
@@ -237,7 +268,13 @@ When analyzing changes, always see the context:
 ast-index usages --show-context methodName
 ```
 
-### 3. **Leverage Pattern Matching**
+### 3. **Use --case-sensitive for C#**
+C# is case-sensitive, use the flag to avoid false positives:
+```bash
+ast-index search "ToString" --case-sensitive
+```
+
+### 4. **Leverage Pattern Matching**
 Use patterns instead of exact names when exploring:
 ```bash
 # Find all handlers
@@ -247,7 +284,7 @@ ast-index search "*Handler" --level prefix
 ast-index search "*Repository" --level prefix
 ```
 
-### 4. **Combine with Other Tools**
+### 5. **Combine with Other Tools**
 
 **With grep/ripgrep:**
 ```bash
@@ -265,7 +302,7 @@ ast-index search symbolName
 git log -p --all -S "symbolName" -- "*.py"
 ```
 
-### 5. **Keep Index Updated**
+### 6. **Keep Index Updated**
 
 After code changes:
 ```bash
@@ -341,7 +378,20 @@ ast-index inheritance BaseController --direction children
 ast-index usages --show-context AuthService
 ```
 
-### Example 3: Finding Test Coverage
+### Example 3: Analyzing a File
+
+```bash
+# Show all symbols in a file
+ast-index file src/UserService.cs
+
+# Find all classes that use this file's symbols
+ast-index search "UserService" --level exact
+
+# Check inheritance from this class
+ast-index inheritance UserService --direction both
+```
+
+### Example 4: Finding Test Coverage
 
 ```bash
 # Find all test classes
@@ -399,8 +449,13 @@ ast-index rebuild
 # Most common commands
 ast-index index                              # Index project
 ast-index search [QUERY]                     # Search symbols (all if no query)
+ast-index search "Query" --case-sensitive    # Case-sensitive search
+ast-index search "Query" --file "path/"      # Filter by file
 ast-index usages [SYMBOL]                    # Find usages (top if no symbol)
+ast-index usages --show-context SYMBOL       # With context and highlighting
 ast-index class [NAME]                       # List/search classes
+ast-index file PATH                          # All symbols in file
+ast-index definition SYMBOL                  # Find definition(s)
 ast-index methods                            # List all methods
 ast-index functions                          # List all functions
 ast-index interfaces                         # List all interfaces

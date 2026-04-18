@@ -5,7 +5,6 @@
 учитывая using директивы (C#) и import statements (другие языки).
 """
 from typing import Any
-from .models import NamespaceMapping
 
 
 class SymbolResolver:

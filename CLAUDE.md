@@ -39,29 +39,40 @@ mypy ast_index
   - Each parser inherits from `BaseParser` and implements `parse()` and `can_parse()`
 
 - **Database** (`ast_index/database.py`): SQLite operations with FTS5 full-text search
-  - Schema: files, symbols, symbols_fts, inheritance, refs, metadata tables
+  - Schema: files, symbols, symbols_fts, inheritance, refs, metadata, usings tables
   - Database location: `~/.cache/ast-index/{project_hash}/index.db`
   - Uses djb2 hash for project path
+  - WAL mode with `busy_timeout=5000` for concurrency
+  - `executemany` for batch inserts
+
+- **Parallel Indexer** (`ast_index/parallel_indexer.py`): Parse-parallel/write-sequential pattern
+  - Files parsed concurrently via ThreadPoolExecutor (CPU-bound)
+  - Results written sequentially in single transaction (I/O-bound)
+  - Batch writes of 100 files per transaction
+  - Eliminates "database is locked" errors and duplicate data
 
 - **Indexer** (`ast_index/indexer.py`): Main indexing logic with batch processing
   - Processes files in batches of 500 (BATCH_SIZE)
   - Supports incremental updates (detects new/modified/deleted files)
-  - Concurrent parsing with thread pool
+  - `rebuild()` uses bulk `Database._clear_all()` for clean slate
 
 - **Search Engine** (`ast_index/search.py`): Three-level search strategy
   1. Exact match (SELECT WHERE name = 'Symbol')
   2. Prefix search via FTS5 (MATCH 'Sym*')
   3. Fuzzy search via LIKE (LIKE '%Symbol%')
+  - Case-sensitive option via `COLLATE BINARY`
+  - `get_top_symbols` aggregates files via `GROUP_CONCAT` with deduplication
 
 - **CLI** (`ast_index/cli.py`): Click-based command interface
-  - Commands: index, update, rebuild, search, class, usages, usings, inheritance, stats, definition
+  - Commands: index, update, rebuild, search, class, usages, usings, inheritance, stats, definition, file, top, methods, functions, interfaces, types, kinds
   - All commands support `--format json` for AI integration
-  - `usages` command supports `--show-context` and `--file` options
-  - **`usings` command** (NEW): Show using directives for C# files with `--format text|json`
-  - **`definition` command** (NEW): Find symbol definition with import resolution
-    ```bash
-    ast-index definition SYMBOL [--file PATH] [--format text|json]
-    ```
+  - `search`: `--case-sensitive`, `--file`, `--level`, `--limit`
+  - `usages`: `--show-context` (symbol highlighting with `>>>match<<<`), `--file`, `--limit` (default 500)
+  - `usings`: `--limit` for truncating results
+  - `inheritance`: `--limit` for truncating results
+  - `definition`: Shows all matches when multiple definitions exist
+  - `file`: Show all symbols in a specific file
+  - Empty query rejected with helpful message
 
 - **References Extraction** (`ast_index/references.py`): Regex-based symbol usage tracking
   - Universal method works across all supported languages
@@ -95,11 +106,6 @@ mypy ast_index
   - Integrates all enhancement modules
   - Returns `NamespaceMapping` in `ParsedFile`
 
-- **CLI usings command**: View using directives for C# files
-  ```bash
-  ast-index usings Models/UserRepository.cs
-  ```
-
 ### Constants and Limits
 
 - `BATCH_SIZE = 500` - Files processed per transaction
@@ -108,7 +114,7 @@ mypy ast_index
 
 ### Data Flow
 
-1. **Indexing**: Scan files → Parse with language-specific parsers → Extract symbols/inheritance/**references** → Store in SQLite
+1. **Indexing**: Scan files → Parse in parallel → Collect ParsedFile results → Write to SQLite in single transaction
 2. **Searching**: Query → SearchEngine (3-level strategy) → Return results
 3. **References**: Query symbol name → Database lookup in `refs` table → Return all usages with context
 4. **Updates**: Compare file mtimes → Parse changed files → Update database incrementally
@@ -175,6 +181,8 @@ Symbols are excluded if they match:
 - Skips lines > 2000 characters (minified code)
 - Deduplicates references using set
 - Context limited to 500 characters
+- `executemany` for batch database inserts
+- Parse-parallel/write-sequential for indexing
 
 ### Accuracy Considerations
 
