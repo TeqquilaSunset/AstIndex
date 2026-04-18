@@ -18,7 +18,6 @@ def validate_limit(ctx, param, value):
 
 
 def output_result(result, format: str, message: str = None):
-    """Output result in specified format."""
     if format == "json":
         click.echo(json.dumps(result, indent=2, default=str))
     else:
@@ -30,7 +29,18 @@ def output_result(result, format: str, message: str = None):
         elif isinstance(result, list):
             for item in result:
                 if isinstance(item, dict):
-                    click.echo(f"- {item.get('name', item)}")
+                    name = item.get("name", item)
+                    kind = item.get("kind")
+                    file_path = item.get("file_path")
+                    line_start = item.get("line_start")
+                    parts = [f"- {name}"]
+                    if kind:
+                        parts[0] += f" ({kind})"
+                    if file_path and line_start:
+                        parts.append(f"[{file_path}:{line_start}]")
+                    elif file_path:
+                        parts.append(f"[{file_path}]")
+                    click.echo(" ".join(parts))
                 else:
                     click.echo(f"- {item}")
 

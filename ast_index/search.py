@@ -33,35 +33,35 @@ class SearchEngine:
         if query is None:
             cursor = self.db._conn.execute(
                 "SELECT * FROM symbols ORDER BY name LIMIT ?",
-                (limit,),
+                (limit * 3,),
             )
-            return self._deduplicate([dict(row) for row in cursor.fetchall()])
+            return self._deduplicate([dict(row) for row in cursor.fetchall()])[:limit]
 
         if case_sensitive:
             if level == "exact":
                 cursor = self.db._conn.execute(
                     "SELECT * FROM symbols WHERE name = ? COLLATE BINARY LIMIT ?",
-                    (query, limit),
+                    (query, limit * 3),
                 )
             else:
                 cursor = self.db._conn.execute(
                     "SELECT * FROM symbols WHERE name LIKE ? COLLATE BINARY LIMIT ?",
-                    (f"%{query}%", limit),
+                    (f"%{query}%", limit * 3),
                 )
-            return self._deduplicate([dict(row) for row in cursor.fetchall()])
+            return self._deduplicate([dict(row) for row in cursor.fetchall()])[:limit]
 
         if level == "exact":
-            results = self.db.get_symbols_by_name(query)[:limit]
-            return self._deduplicate(results)
+            results = self.db.get_symbols_by_name(query)
+            return self._deduplicate(results)[:limit]
         elif level == "prefix":
             if query.startswith("*"):
                 clean_query = query.lstrip("*")
-                return self._deduplicate(self._fuzzy_search(clean_query, limit))
+                return self._deduplicate(self._fuzzy_search(clean_query, limit * 3))[:limit]
             fts_query = f'"{query}"*'
-            results = self.db.search_symbols(fts_query, limit)
-            return self._deduplicate(results)
+            results = self.db.search_symbols(fts_query, limit * 3)
+            return self._deduplicate(results)[:limit]
         else:
-            return self._deduplicate(self._fuzzy_search(query, limit))
+            return self._deduplicate(self._fuzzy_search(query, limit * 3))[:limit]
 
     def _deduplicate(self, symbols: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen = set()
@@ -100,18 +100,17 @@ class SearchEngine:
             List of class/interface symbols.
         """
         if name is None:
-            # Return all classes/interfaces
             cursor = self.db._conn.execute(
                 "SELECT * FROM symbols WHERE kind IN ('class', 'interface') ORDER BY name LIMIT ?",
-                (limit,),
+                (limit * 3,),
             )
         else:
-            # Search by name (fuzzy match)
             cursor = self.db._conn.execute(
-                "SELECT * FROM symbols WHERE name LIKE ? AND kind IN ('class', 'interface') ORDER BY name LIMIT ?",
-                (f"%{name}%", limit),
+                "SELECT * FROM symbols WHERE name LIKE ? "
+                "AND kind IN ('class', 'interface') ORDER BY name LIMIT ?",
+                (f"%{name}%", limit * 3),
             )
-        return [dict(row) for row in cursor.fetchall()]
+        return self._deduplicate([dict(row) for row in cursor.fetchall()])[:limit]
 
     def search_usages(
         self, symbol_name: str, limit: int = 500, file_filter: str | None = None
