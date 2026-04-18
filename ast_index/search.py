@@ -29,39 +29,65 @@ class SearchEngine:
         limit: int = 50,
         level: str = "prefix",
         case_sensitive: bool = False,
+        kind: str | None = None,
     ) -> list[dict[str, Any]]:
         if query is None:
-            cursor = self.db._conn.execute(
-                "SELECT * FROM symbols ORDER BY name LIMIT ?",
-                (limit * 3,),
-            )
+            if kind:
+                cursor = self.db._conn.execute(
+                    "SELECT * FROM symbols WHERE kind = ? ORDER BY name LIMIT ?",
+                    (kind, limit * 3),
+                )
+            else:
+                cursor = self.db._conn.execute(
+                    "SELECT * FROM symbols ORDER BY name LIMIT ?",
+                    (limit * 3,),
+                )
             return self._deduplicate([dict(row) for row in cursor.fetchall()])[:limit]
 
         if case_sensitive:
             if level == "exact":
-                cursor = self.db._conn.execute(
-                    "SELECT * FROM symbols WHERE name = ? COLLATE BINARY LIMIT ?",
-                    (query, limit * 3),
-                )
+                if kind:
+                    cursor = self.db._conn.execute(
+                        "SELECT * FROM symbols WHERE name = ? COLLATE BINARY AND kind = ? LIMIT ?",
+                        (query, kind, limit * 3),
+                    )
+                else:
+                    cursor = self.db._conn.execute(
+                        "SELECT * FROM symbols WHERE name = ? COLLATE BINARY LIMIT ?",
+                        (query, limit * 3),
+                    )
             else:
-                cursor = self.db._conn.execute(
-                    "SELECT * FROM symbols WHERE name LIKE ? COLLATE BINARY LIMIT ?",
-                    (f"%{query}%", limit * 3),
-                )
+                if kind:
+                    cursor = self.db._conn.execute(
+                        "SELECT * FROM symbols "
+                        "WHERE name LIKE ? COLLATE BINARY AND kind = ? LIMIT ?",
+                        (f"%{query}%", kind, limit * 3),
+                    )
+                else:
+                    cursor = self.db._conn.execute(
+                        "SELECT * FROM symbols WHERE name LIKE ? COLLATE BINARY LIMIT ?",
+                        (f"%{query}%", limit * 3),
+                    )
             return self._deduplicate([dict(row) for row in cursor.fetchall()])[:limit]
 
         if level == "exact":
-            results = self.db.get_symbols_by_name(query)
+            results = self.db.get_symbols_by_name(query, kind=kind)
             return self._deduplicate(results)[:limit]
         elif level == "prefix":
             if query.startswith("*"):
                 clean_query = query.lstrip("*")
-                return self._deduplicate(self._fuzzy_search(clean_query, limit * 3))[:limit]
-            fts_query = f'"{query}"*'
+                return self._deduplicate(self._fuzzy_search(clean_query, limit * 3, kind=kind))[
+                    :limit
+                ]
+            clean_query = query.rstrip("*")
+            if kind:
+                results = self._fuzzy_search(clean_query, limit * 3, kind=kind)
+                return self._deduplicate(results)[:limit]
+            fts_query = f'"{clean_query}"*'
             results = self.db.search_symbols(fts_query, limit * 3)
             return self._deduplicate(results)[:limit]
         else:
-            return self._deduplicate(self._fuzzy_search(query, limit * 3))[:limit]
+            return self._deduplicate(self._fuzzy_search(query, limit * 3, kind=kind))[:limit]
 
     def _deduplicate(self, symbols: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen = set()
@@ -73,19 +99,33 @@ class SearchEngine:
                 result.append(s)
         return result
 
-    def _fuzzy_search(self, query: str, limit: int) -> list[dict[str, Any]]:
+    def _fuzzy_search(
+        self, query: str, limit: int, kind: str | None = None
+    ) -> list[dict[str, Any]]:
         clean = query.strip("*")
         pattern = f"%{clean}%"
-        cursor = self.db._conn.execute(
-            """
-            SELECT * FROM symbols WHERE name LIKE ?
-            ORDER BY
-                CASE WHEN kind IN ('class', 'interface') THEN 0 ELSE 1 END,
-                name
-            LIMIT ?
-            """,
-            (pattern, limit),
-        )
+        if kind:
+            cursor = self.db._conn.execute(
+                """
+                SELECT * FROM symbols WHERE name LIKE ? AND kind = ?
+                ORDER BY
+                    CASE WHEN kind IN ('class', 'interface') THEN 0 ELSE 1 END,
+                    name
+                LIMIT ?
+                """,
+                (pattern, kind, limit),
+            )
+        else:
+            cursor = self.db._conn.execute(
+                """
+                SELECT * FROM symbols WHERE name LIKE ?
+                ORDER BY
+                    CASE WHEN kind IN ('class', 'interface') THEN 0 ELSE 1 END,
+                    name
+                LIMIT ?
+                """,
+                (pattern, limit),
+            )
         return [dict(row) for row in cursor.fetchall()]
 
     def search_class(self, name: str | None, limit: int = 50) -> list[dict[str, Any]]:
@@ -113,11 +153,15 @@ class SearchEngine:
         return self._deduplicate([dict(row) for row in cursor.fetchall()])[:limit]
 
     def search_usages(
-        self, symbol_name: str, limit: int = 500, file_filter: str | None = None
+        self,
+        symbol_name: str,
+        limit: int = 500,
+        file_filter: str | None = None,
+        kind: str | None = None,
     ) -> dict[str, Any]:
         usages = self.db.get_usages(symbol_name, limit=limit, file_filter=file_filter)
         total_count = self.db.get_usages_count(symbol_name, file_filter=file_filter)
-        definitions = self.db.get_symbols_by_name(symbol_name)
+        definitions = self.db.get_symbols_by_name(symbol_name, kind=kind)
         return {
             "symbol": symbol_name,
             "definitions": definitions,

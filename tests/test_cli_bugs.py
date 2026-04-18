@@ -77,6 +77,152 @@ class TestLimitInUsages:
         finally:
             engine.close()
 
+
+class TestKindFilter:
+    def test_search_with_kind_filter(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="Handler",
+                kind="class",
+                file_path="/test/handler.py",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="Handler",
+                kind="function",
+                file_path="/test/utils.py",
+                line_start=1,
+                line_end=5,
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        results = engine.search("Handler", limit=50, level="exact", kind="class")
+        assert len(results) == 1
+        assert results[0]["kind"] == "class"
+        engine.close()
+
+    def test_search_with_kind_none_returns_all(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="Processor",
+                kind="class",
+                file_path="/test/a.py",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="Processor",
+                kind="method",
+                file_path="/test/b.py",
+                line_start=1,
+                line_end=5,
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        results = engine.search("Processor", limit=50, level="exact", kind=None)
+        assert len(results) == 2
+        engine.close()
+
+    def test_cli_search_with_kind(self, temp_dir):
+        from click.testing import CliRunner
+        from ast_index.cli import cli
+        from ast_index.config import Config
+
+        config = Config(root=temp_dir)
+        db = Database(config.db_path)
+        db.insert_symbol(
+            Symbol(
+                name="Processor",
+                kind="class",
+                file_path="/test/proc.py",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="Processor",
+                kind="method",
+                file_path="/test/proc.py",
+                line_start=11,
+                line_end=15,
+            )
+        )
+        db.close()
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "search",
+                "Processor",
+                "--root",
+                str(temp_dir),
+                "--kind",
+                "class",
+            ],
+        )
+        assert result.exit_code == 0
+        assert "class" in result.output
+
+    def test_cli_usages_with_kind(self, temp_dir):
+        from click.testing import CliRunner
+        from ast_index.cli import cli
+        from ast_index.config import Config
+
+        config = Config(root=temp_dir)
+        db = Database(config.db_path)
+        db.insert_symbol(
+            Symbol(
+                name="doWork",
+                kind="method",
+                file_path="/test/a.py",
+                line_start=1,
+                line_end=5,
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="doWork",
+                kind="function",
+                file_path="/test/b.py",
+                line_start=1,
+                line_end=5,
+            )
+        )
+        db.insert_references(
+            [
+                Reference("doWork", "/test/a.py", "/test/c.py", 10, 0, "usage"),
+                Reference("doWork", "/test/b.py", "/test/c.py", 20, 0, "usage"),
+            ]
+        )
+        db.close()
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "usages",
+                "doWork",
+                "--root",
+                str(temp_dir),
+                "--kind",
+                "method",
+            ],
+        )
+        assert result.exit_code == 0
+
     def test_get_usages_with_file_filter(self, db_path):
         db = Database(db_path)
         try:
@@ -236,3 +382,44 @@ class TestOutputResult:
         output_result(items, "text", "Results")
         captured = capsys.readouterr()
         assert "SimpleSymbol" in captured.out
+
+
+class TestWildcardSearch:
+    def test_trailing_wildcard_prefix_search(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="UserRepository",
+                kind="class",
+                file_path="/test/repo.py",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="UserService",
+                kind="class",
+                file_path="/test/service.py",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="UnrelatedThing",
+                kind="class",
+                file_path="/test/other.py",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        results = engine.search("User*", limit=10, level="prefix")
+        names = [r["name"] for r in results]
+        assert "UserRepository" in names
+        assert "UserService" in names
+        assert "UnrelatedThing" not in names
+        engine.close()

@@ -221,8 +221,13 @@ class Database:
         ).fetchall()
         return [dict(row) for row in rows]
 
-    def get_symbols_by_name(self, name: str) -> list[dict[str, Any]]:
-        rows = self._conn.execute("SELECT * FROM symbols WHERE name = ?", (name,)).fetchall()
+    def get_symbols_by_name(self, name: str, kind: str | None = None) -> list[dict[str, Any]]:
+        if kind:
+            rows = self._conn.execute(
+                "SELECT * FROM symbols WHERE name = ? AND kind = ?", (name, kind)
+            ).fetchall()
+        else:
+            rows = self._conn.execute("SELECT * FROM symbols WHERE name = ?", (name,)).fetchall()
         return [dict(row) for row in rows]
 
     def get_symbols_by_kind(self, kind: str) -> list[dict[str, Any]]:

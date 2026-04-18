@@ -146,6 +146,9 @@ def rebuild(root: str, format: str):
 @click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
 @click.option("--file", "file_filter", type=str, help="Filter results by file path")
 @click.option("--case-sensitive", is_flag=True, help="Case-sensitive search")
+@click.option(
+    "--kind", type=str, default=None, help="Filter by symbol kind (class, method, function, etc.)"
+)
 def search(
     query: str | None,
     root: str,
@@ -154,6 +157,7 @@ def search(
     limit: int,
     file_filter: str | None,
     case_sensitive: bool,
+    kind: str | None,
 ):
     """Search for symbols by name. If QUERY is not provided, lists all symbols.
 
@@ -170,7 +174,9 @@ def search(
     config = load_config(Path(root))
 
     with SearchEngine(config=config) as engine:
-        results = engine.search(query, limit=limit, level=level, case_sensitive=case_sensitive)
+        results = engine.search(
+            query, limit=limit, level=level, case_sensitive=case_sensitive, kind=kind
+        )
 
     if file_filter:
         results = [r for r in results if file_filter in r.get("file_path", "")]
@@ -206,8 +212,15 @@ def search_class(name: str | None, root: str, format: str, limit: int):
 @click.option("--limit", type=int, default=500, help="Maximum results", callback=validate_limit)
 @click.option("--show-context", is_flag=True, help="Show context of each reference")
 @click.option("--file", type=str, help="Filter results by file path")
+@click.option("--kind", type=str, default=None, help="Filter definitions by symbol kind")
 def usages(
-    symbol: str | None, root: str, format: str, limit: int, show_context: bool, file: str | None
+    symbol: str | None,
+    root: str,
+    format: str,
+    limit: int,
+    show_context: bool,
+    file: str | None,
+    kind: str | None,
 ):
     """Find all usages of a symbol. If SYMBOL is not provided, shows most referenced symbols."""
     config = load_config(Path(root))
@@ -231,7 +244,9 @@ def usages(
                     click.echo(f"  {ref_count:4d} - {item['name']} ({item['kind']}) [{files_str}]")
             return
 
-        results = engine.search_usages(symbol, limit=limit, file_filter=file if file else None)
+        results = engine.search_usages(
+            symbol, limit=limit, file_filter=file if file else None, kind=kind
+        )
 
     definitions = results.get("definitions", [])
     total_count = results.get("total_count", len(results["references"]))
