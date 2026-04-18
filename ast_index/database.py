@@ -315,11 +315,33 @@ class Database:
     def delete_refs_for_file(self, file_path: str) -> None:
         self._conn.execute("DELETE FROM refs WHERE ref_file = ?", (file_path,))
 
-    def get_usages(self, symbol_name: str) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
-            "SELECT * FROM refs WHERE symbol_name = ?", (symbol_name,)
-        ).fetchall()
+    def get_usages(
+        self, symbol_name: str, limit: int | None = None, file_filter: str | None = None
+    ) -> list[dict[str, Any]]:
+        query = "SELECT * FROM refs WHERE symbol_name = ?"
+        params: list[Any] = [symbol_name]
+
+        if file_filter:
+            query += " AND ref_file LIKE ?"
+            params.append(f"%{file_filter}%")
+
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
+
+        rows = self._conn.execute(query, params).fetchall()
         return [dict(row) for row in rows]
+
+    def get_usages_count(self, symbol_name: str, file_filter: str | None = None) -> int:
+        query = "SELECT COUNT(*) FROM refs WHERE symbol_name = ?"
+        params: list[Any] = [symbol_name]
+
+        if file_filter:
+            query += " AND ref_file LIKE ?"
+            params.append(f"%{file_filter}%")
+
+        row = self._conn.execute(query, params).fetchone()
+        return row[0] if row else 0
 
     def set_metadata(self, key: str, value: str) -> None:
         self._conn.execute(

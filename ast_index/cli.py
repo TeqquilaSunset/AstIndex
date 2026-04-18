@@ -196,7 +196,9 @@ def search_class(name: str | None, root: str, format: str, limit: int):
 @click.option("--limit", type=int, default=500, help="Maximum results", callback=validate_limit)
 @click.option("--show-context", is_flag=True, help="Show context of each reference")
 @click.option("--file", type=str, help="Filter results by file path")
-def usages(symbol: str | None, root: str, format: str, limit: int, show_context: bool, file: str):
+def usages(
+    symbol: str | None, root: str, format: str, limit: int, show_context: bool, file: str | None
+):
     """Find all usages of a symbol. If SYMBOL is not provided, shows most referenced symbols."""
     config = load_config(Path(root))
 
@@ -219,15 +221,12 @@ def usages(symbol: str | None, root: str, format: str, limit: int, show_context:
                     click.echo(f"  {ref_count:4d} - {item['name']} ({item['kind']}) [{files_str}]")
             return
 
-        # Original behavior when symbol is provided
-        results = engine.search_usages(symbol, limit=limit)
-
-        if file:
-            results["references"] = [
-                r for r in results["references"] if file in r.get("ref_file", "")
-            ]
+        results = engine.search_usages(symbol, limit=limit, file_filter=file if file else None)
 
     definitions = results.get("definitions", [])
+    total_count = results.get("total_count", len(results["references"]))
+    ref_count = len(results["references"])
+
     if len(definitions) > 10:
         click.echo(
             f"Warning: '{symbol}' has {len(definitions)} definitions. "
@@ -235,10 +234,13 @@ def usages(symbol: str | None, root: str, format: str, limit: int, show_context:
             err=True,
         )
 
+    count_msg = f"Usages of {symbol}"
+    if total_count > ref_count:
+        count_msg = f"Usages of {symbol} (showing {ref_count} of {total_count})"
+
     if format == "json":
-        output_result(results, format, f"Usages of {symbol}")
+        output_result(results, format, count_msg)
     elif show_context:
-        # Custom output with context - iterate over references, not the dict
         references = results["references"]
         definitions = results.get("definitions", [])
 
@@ -246,16 +248,14 @@ def usages(symbol: str | None, root: str, format: str, limit: int, show_context:
             click.echo(f"No usages found for {symbol}")
             return
 
-        # Show definitions first
         if definitions:
             click.echo(f"Definitions of {symbol}:")
             for defn in definitions:
                 click.echo(f"  {defn['file_path']}:{defn['line_start']}")
             click.echo()
 
-        # Show references
         if references:
-            click.echo(f"Usages of {symbol} ({len(references)} found):")
+            click.echo(f"{count_msg} ({ref_count} found):")
             click.echo()
             for ref in references:
                 click.echo(f"  {ref['ref_file']}:{ref['ref_line']}")
@@ -277,7 +277,7 @@ def usages(symbol: str | None, root: str, format: str, limit: int, show_context:
                         click.echo(f"    {context}")
                 click.echo()
     else:
-        output_result(results, format, f"Usages of {symbol}")
+        output_result(results, format, count_msg)
 
 
 @cli.command()

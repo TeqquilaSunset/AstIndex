@@ -113,13 +113,17 @@ class SearchEngine:
             )
         return [dict(row) for row in cursor.fetchall()]
 
-    def search_usages(self, symbol_name: str, limit: int = 500) -> dict[str, Any]:
-        usages = self.db.get_usages(symbol_name)[:limit]
+    def search_usages(
+        self, symbol_name: str, limit: int = 500, file_filter: str | None = None
+    ) -> dict[str, Any]:
+        usages = self.db.get_usages(symbol_name, limit=limit, file_filter=file_filter)
+        total_count = self.db.get_usages_count(symbol_name, file_filter=file_filter)
         definitions = self.db.get_symbols_by_name(symbol_name)
         return {
             "symbol": symbol_name,
             "definitions": definitions,
             "references": usages,
+            "total_count": total_count,
         }
 
     def search_inheritance(self, symbol_name: str, direction: str = "children") -> dict[str, Any]:
