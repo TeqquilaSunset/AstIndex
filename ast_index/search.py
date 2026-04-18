@@ -30,24 +30,12 @@ class SearchEngine:
         level: str = "prefix",
         case_sensitive: bool = False,
     ) -> list[dict[str, Any]]:
-        """
-        Search for symbols by name/pattern.
-
-        Args:
-            query: Symbol name or pattern. If None, returns all symbols.
-            limit: Maximum number of results.
-            level: Search level (exact, prefix, fuzzy).
-            case_sensitive: Whether search should be case-sensitive.
-
-        Returns:
-            List of matching symbols.
-        """
         if query is None:
             cursor = self.db._conn.execute(
                 "SELECT * FROM symbols ORDER BY name LIMIT ?",
                 (limit,),
             )
-            return [dict(row) for row in cursor.fetchall()]
+            return self._deduplicate([dict(row) for row in cursor.fetchall()])
 
         if case_sensitive:
             if level == "exact":
@@ -60,33 +48,37 @@ class SearchEngine:
                     "SELECT * FROM symbols WHERE name LIKE ? COLLATE BINARY LIMIT ?",
                     (f"%{query}%", limit),
                 )
-            return [dict(row) for row in cursor.fetchall()]
+            return self._deduplicate([dict(row) for row in cursor.fetchall()])
 
         if level == "exact":
-            return self.db.get_symbols_by_name(query)[:limit]
+            results = self.db.get_symbols_by_name(query)[:limit]
+            return self._deduplicate(results)
         elif level == "prefix":
-            # FTS5 doesn't support suffix search (* at the beginning)
-            # Auto-fallback to fuzzy for wildcard patterns
             if query.startswith("*"):
-                # Remove leading * and use fuzzy search
                 clean_query = query.lstrip("*")
-                return self._fuzzy_search(clean_query, limit)
+                return self._deduplicate(self._fuzzy_search(clean_query, limit))
             fts_query = f'"{query}"*'
-            return self.db.search_symbols(fts_query, limit)
+            results = self.db.search_symbols(fts_query, limit)
+            return self._deduplicate(results)
         else:
-            return self._fuzzy_search(query, limit)
+            return self._deduplicate(self._fuzzy_search(query, limit))
+
+    def _deduplicate(self, symbols: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        seen = set()
+        result = []
+        for s in symbols:
+            key = (s.get("name"), s.get("kind"), s.get("file_path"))
+            if key not in seen:
+                seen.add(key)
+                result.append(s)
+        return result
 
     def _fuzzy_search(self, query: str, limit: int) -> list[dict[str, Any]]:
-        """
-        Fuzzy search with deduplication by symbol name.
-
-        Returns only one entry per unique symbol name, preferring class/interface.
-        """
-        pattern = f"%{query}%"
+        clean = query.strip("*")
+        pattern = f"%{clean}%"
         cursor = self.db._conn.execute(
             """
             SELECT * FROM symbols WHERE name LIKE ?
-            GROUP BY name
             ORDER BY
                 CASE WHEN kind IN ('class', 'interface') THEN 0 ELSE 1 END,
                 name
@@ -175,7 +167,9 @@ class SearchEngine:
         cursor = self.db._conn.execute(
             """
             SELECT s.name, s.kind,
-                   GROUP_CONCAT(DISTINCT s.file_path, '||') as files,
+                   (SELECT GROUP_CONCAT(distinct_path, '||')
+                    FROM (SELECT DISTINCT s2.file_path as distinct_path
+                          FROM symbols s2 WHERE s2.name = s.name AND s2.kind = s.kind)) as files,
                    COUNT(r.id) as reference_count
             FROM symbols s
             LEFT JOIN refs r ON s.name = r.symbol_name

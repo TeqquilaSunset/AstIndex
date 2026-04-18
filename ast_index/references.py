@@ -19,7 +19,7 @@ def _get_camelcase_pattern() -> re.Pattern:
     global _CAMELCASE_PATTERN
     if _CAMELCASE_PATTERN is None:
         # Supports Unicode letters in identifiers
-        _CAMELCASE_PATTERN = re.compile(r'\b([A-Z][a-zA-Z0-9_$]*)\b')
+        _CAMELCASE_PATTERN = re.compile(r"\b([A-Z][a-zA-Z0-9_$]*)\b")
     return _CAMELCASE_PATTERN
 
 
@@ -28,7 +28,7 @@ def _get_function_call_pattern() -> re.Pattern:
     global _FUNCTION_CALL_PATTERN
     if _FUNCTION_CALL_PATTERN is None:
         # Supports Unicode letters in identifiers
-        _FUNCTION_CALL_PATTERN = re.compile(r'\b([a-z][a-zA-Z0-9_$]*)\s*\(')
+        _FUNCTION_CALL_PATTERN = re.compile(r"\b([a-z][a-zA-Z0-9_$]*)\s*\(")
     return _FUNCTION_CALL_PATTERN
 
 
@@ -57,8 +57,8 @@ def strip_comments(content: str, language: str) -> str:
     # State machine states
     NORMAL = 0
     SINGLE_LINE_COMMENT = 1  # Python # or C-style //
-    MULTI_LINE_COMMENT = 2   # /* */
-    PYTHON_DOCSTRING = 3     # """ or '''
+    MULTI_LINE_COMMENT = 2  # /* */
+    PYTHON_DOCSTRING = 3  # """ or '''
 
     result = []
     i = 0
@@ -69,22 +69,22 @@ def strip_comments(content: str, language: str) -> str:
     while i < n:
         if state == NORMAL:
             # Check for single-line comments
-            if is_python and content[i] == '#':
+            if is_python and content[i] == "#":
                 state = SINGLE_LINE_COMMENT
                 i += 1
                 continue
-            elif not is_python and i + 1 < n and content[i:i+2] == '//':
+            elif not is_python and i + 1 < n and content[i : i + 2] == "//":
                 state = SINGLE_LINE_COMMENT
                 i += 2
                 continue
             # Check for multi-line comments (C-style)
-            elif not is_python and i + 1 < n and content[i:i+2] == '/*':
+            elif not is_python and i + 1 < n and content[i : i + 2] == "/*":
                 state = MULTI_LINE_COMMENT
                 i += 2
                 continue
             # Check for Python docstrings
             elif is_python and i + 2 < n:
-                if content[i:i+3] in ('"""', "'''"):
+                if content[i : i + 3] in ('"""', "'''"):
                     state = PYTHON_DOCSTRING
                     docstring_char = content[i]
                     i += 3
@@ -95,14 +95,14 @@ def strip_comments(content: str, language: str) -> str:
 
         elif state == SINGLE_LINE_COMMENT:
             # Skip until end of line
-            if content[i] in ('\n', '\r'):
+            if content[i] in ("\n", "\r"):
                 result.append(content[i])
                 state = NORMAL
             i += 1
 
         elif state == MULTI_LINE_COMMENT:
             # Skip until */
-            if i + 1 < n and content[i:i+2] == '*/':
+            if i + 1 < n and content[i : i + 2] == "*/":
                 state = NORMAL
                 i += 2
             else:
@@ -110,7 +110,7 @@ def strip_comments(content: str, language: str) -> str:
 
         elif state == PYTHON_DOCSTRING:
             # Skip until closing triple quotes
-            if i + 2 < n and content[i:i+3] in ('"""', "'''"):
+            if i + 2 < n and content[i : i + 3] in ('"""', "'''"):
                 if content[i] == docstring_char:
                     state = NORMAL
                     docstring_char = None
@@ -118,7 +118,7 @@ def strip_comments(content: str, language: str) -> str:
                     continue
             i += 1
 
-    return ''.join(result)
+    return "".join(result)
 
 
 def remove_string_literals(content: str) -> str:
@@ -162,30 +162,30 @@ def remove_string_literals(content: str) -> str:
 
         if state == NORMAL:
             # Check for C# verbatim string
-            if i + 1 < n and char == '@' and content[i+1] == '"':
-                result.append('@@')  # Keep length
+            if i + 1 < n and char == "@" and content[i + 1] == '"':
+                result.append("@@")  # Keep length
                 state = IN_CSHARP_VERBATIM
                 i += 2
                 continue
             # Check for Python triple quotes
-            elif i + 2 < n and content[i:i+3] == '"""':
-                result.append('   ')  # Keep length
+            elif i + 2 < n and content[i : i + 3] == '"""':
+                result.append("   ")  # Keep length
                 state = IN_PYTHON_TRIPLE_DOUBLE
                 i += 3
                 continue
-            elif i + 2 < n and content[i:i+3] == "'''":
-                result.append('   ')  # Keep length
+            elif i + 2 < n and content[i : i + 3] == "'''":
+                result.append("   ")  # Keep length
                 state = IN_PYTHON_TRIPLE_SINGLE
                 i += 3
                 continue
             # Check for regular strings
             elif char == '"':
-                result.append(' ')  # Replace opening quote with space
+                result.append(" ")  # Replace opening quote with space
                 state = IN_DOUBLE_QUOTE
                 i += 1
                 continue
             elif char == "'":
-                result.append(' ')  # Replace opening quote with space
+                result.append(" ")  # Replace opening quote with space
                 state = IN_SINGLE_QUOTE
                 i += 1
                 continue
@@ -195,80 +195,80 @@ def remove_string_literals(content: str) -> str:
 
         elif state == IN_DOUBLE_QUOTE:
             if escape_next:
-                result.append(' ')  # Replace escaped char with space
+                result.append(" ")  # Replace escaped char with space
                 escape_next = False
                 i += 1
                 continue
-            elif char == '\\':
-                result.append(' ')
+            elif char == "\\":
+                result.append(" ")
                 escape_next = True
                 i += 1
                 continue
             elif char == '"':
-                result.append(' ')  # Replace closing quote with space
+                result.append(" ")  # Replace closing quote with space
                 state = NORMAL
                 i += 1
                 continue
             else:
-                result.append(' ')
+                result.append(" ")
                 i += 1
 
         elif state == IN_SINGLE_QUOTE:
             if escape_next:
-                result.append(' ')  # Replace escaped char with space
+                result.append(" ")  # Replace escaped char with space
                 escape_next = False
                 i += 1
                 continue
-            elif char == '\\':
-                result.append(' ')
+            elif char == "\\":
+                result.append(" ")
                 escape_next = True
                 i += 1
                 continue
             elif char == "'":
-                result.append(' ')  # Replace closing quote with space
+                result.append(" ")  # Replace closing quote with space
                 state = NORMAL
                 i += 1
                 continue
             else:
-                result.append(' ')
+                result.append(" ")
                 i += 1
 
         elif state == IN_CSHARP_VERBATIM:
             # In C# verbatim strings, only "" is an escape sequence
-            if i + 1 < n and char == '"' and content[i+1] == '"':
-                result.append('  ')  # Two quotes -> two spaces
+            if i + 1 < n and char == '"' and content[i + 1] == '"':
+                result.append("  ")  # Two quotes -> two spaces
                 i += 2
                 continue
             elif char == '"':
-                result.append(' ')  # Replace closing quote with space
+                result.append(" ")  # Replace closing quote with space
                 state = NORMAL
                 i += 1
                 continue
             else:
-                result.append(' ')
+                result.append(" ")
                 i += 1
 
         elif state == IN_PYTHON_TRIPLE_DOUBLE:
-            if i + 2 < n and content[i:i+3] == '"""':
-                result.append('   ')  # Replace closing quotes with spaces
+            if i + 2 < n and content[i : i + 3] == '"""':
+                result.append("   ")  # Replace closing quotes with spaces
                 state = NORMAL
                 i += 3
                 continue
             else:
-                result.append(' ')
+                result.append(" ")
                 i += 1
 
         elif state == IN_PYTHON_TRIPLE_SINGLE:
-            if i + 2 < n and content[i:i+3] == "'''":
-                result.append('   ')  # Replace closing quotes with spaces
+            if i + 2 < n and content[i : i + 3] == "'''":
+                result.append("   ")  # Replace closing quotes with spaces
                 state = NORMAL
                 i += 3
                 continue
             else:
-                result.append(' ')
+                result.append(" ")
                 i += 1
 
-    return ''.join(result)
+    return "".join(result)
 
 
 def is_excluded_symbol(
@@ -276,7 +276,7 @@ def is_excluded_symbol(
     keywords: set[str],
     standard_types: set[str],
     defined_symbols: set[str],
-    line: str = ""
+    line: str = "",
 ) -> bool:
     """
     Проверить, следует ли исключить символ из ссылок.
@@ -313,12 +313,14 @@ def is_excluded_symbol(
     if line:
         stripped_line = line.strip()
         # Skip import/using/package lines
-        if (stripped_line.startswith("import ") or
-            stripped_line.startswith("using ") or
-            stripped_line.startswith("package ") or
-            stripped_line.startswith("from ") or
-            stripped_line.startswith("#import ") or
-            stripped_line.startswith("#using ")):
+        if (
+            stripped_line.startswith("import ")
+            or stripped_line.startswith("using ")
+            or stripped_line.startswith("package ")
+            or stripped_line.startswith("from ")
+            or stripped_line.startswith("#import ")
+            or stripped_line.startswith("#using ")
+        ):
             return True
 
     # Don't exclude
@@ -326,10 +328,7 @@ def is_excluded_symbol(
 
 
 def extract_references_universal(
-    content: str,
-    file_path: str,
-    language: str,
-    defined_symbols: set[str]
+    content: str, file_path: str, language: str, defined_symbols: set[str]
 ) -> list[Reference]:
     """
     Универсальный метод извлечения ссылок.
@@ -374,7 +373,7 @@ def extract_references_universal(
     references = []
     seen_refs = set()  # For deduplication
 
-    lines = content_without_strings.split('\n')
+    lines = content_without_strings.split("\n")
 
     for line_num, line in enumerate(lines, start=1):
         # Skip long lines (minified code)
@@ -382,7 +381,7 @@ def extract_references_universal(
             continue
 
         # Get original line for context (from original content)
-        original_lines = content.split('\n')
+        original_lines = content.split("\n")
         original_line = original_lines[line_num - 1] if line_num <= len(original_lines) else line
 
         # Find CamelCase identifiers
@@ -391,8 +390,7 @@ def extract_references_universal(
             col_start = match.start(1)
 
             # Skip if excluded
-            if is_excluded_symbol(symbol_name, keywords, standard_types,
-                                 defined_symbols, line):
+            if is_excluded_symbol(symbol_name, keywords, standard_types, defined_symbols, line):
                 continue
 
             # Create unique key for deduplication
@@ -402,43 +400,43 @@ def extract_references_universal(
             seen_refs.add(ref_key)
 
             # Create reference
-            context = original_line[:500] if original_line else None
-            references.append(Reference(
-                symbol_name=symbol_name,
-                symbol_file="",  # Will be filled by caller
-                ref_file=file_path,
-                ref_line=line_num,
-                ref_col=col_start,
-                ref_kind="reference",
-                context=context
-            ))
+            context = original_line[:500].rstrip("\r") if original_line else None
+            references.append(
+                Reference(
+                    symbol_name=symbol_name,
+                    symbol_file="",
+                    ref_file=file_path,
+                    ref_line=line_num,
+                    ref_col=col_start,
+                    ref_kind="reference",
+                    context=context,
+                )
+            )
 
         # Find function calls
         for match in function_call_pattern.finditer(line):
             symbol_name = match.group(1)
             col_start = match.start(1)
 
-            # Skip if excluded
-            if is_excluded_symbol(symbol_name, keywords, standard_types,
-                                 defined_symbols, line):
+            if is_excluded_symbol(symbol_name, keywords, standard_types, defined_symbols, line):
                 continue
 
-            # Create unique key for deduplication
             ref_key = (symbol_name, file_path, line_num, col_start)
             if ref_key in seen_refs:
                 continue
             seen_refs.add(ref_key)
 
-            # Create reference
-            context = original_line[:500] if original_line else None
-            references.append(Reference(
-                symbol_name=symbol_name,
-                symbol_file="",  # Will be filled by caller
-                ref_file=file_path,
-                ref_line=line_num,
-                ref_col=col_start,
-                ref_kind="call",
-                context=context
-            ))
+            context = original_line[:500].rstrip("\r") if original_line else None
+            references.append(
+                Reference(
+                    symbol_name=symbol_name,
+                    symbol_file="",  # Will be filled by caller
+                    ref_file=file_path,
+                    ref_line=line_num,
+                    ref_col=col_start,
+                    ref_kind="call",
+                    context=context,
+                )
+            )
 
     return references

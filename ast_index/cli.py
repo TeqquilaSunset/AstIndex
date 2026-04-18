@@ -222,11 +222,18 @@ def usages(symbol: str | None, root: str, format: str, limit: int, show_context:
         # Original behavior when symbol is provided
         results = engine.search_usages(symbol, limit=limit)
 
-        # Filter by file if specified - filter references, not the whole result dict
         if file:
             results["references"] = [
-                r for r in results["references"] if r.get("ref_file", "").endswith(file)
+                r for r in results["references"] if file in r.get("ref_file", "")
             ]
+
+    definitions = results.get("definitions", [])
+    if len(definitions) > 10:
+        click.echo(
+            f"Warning: '{symbol}' has {len(definitions)} definitions. "
+            f"Use --file to filter by specific file.",
+            err=True,
+        )
 
     if format == "json":
         output_result(results, format, f"Usages of {symbol}")
@@ -253,7 +260,9 @@ def usages(symbol: str | None, root: str, format: str, limit: int, show_context:
             for ref in references:
                 click.echo(f"  {ref['ref_file']}:{ref['ref_line']}")
                 if ref.get("context"):
-                    context = ref["context"]
+                    context = ref["context"].replace("\r", "")
+                    if not context.strip():
+                        continue
                     if len(context) > 200:
                         context = context[:200] + "..."
                     context_lower = context.lower()
