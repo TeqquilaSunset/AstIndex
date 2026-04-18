@@ -213,6 +213,9 @@ def search_class(name: str | None, root: str, format: str, limit: int):
 @click.option("--show-context", is_flag=True, help="Show context of each reference")
 @click.option("--file", type=str, help="Filter results by file path")
 @click.option("--kind", type=str, default=None, help="Filter definitions by symbol kind")
+@click.option(
+    "--resolve", is_flag=True, help="Resolve references to specific definitions by namespace"
+)
 def usages(
     symbol: str | None,
     root: str,
@@ -221,6 +224,7 @@ def usages(
     show_context: bool,
     file: str | None,
     kind: str | None,
+    resolve: bool,
 ):
     """Find all usages of a symbol. If SYMBOL is not provided, shows most referenced symbols."""
     config = load_config(Path(root))
@@ -245,7 +249,7 @@ def usages(
             return
 
         results = engine.search_usages(
-            symbol, limit=limit, file_filter=file if file else None, kind=kind
+            symbol, limit=limit, file_filter=file if file else None, kind=kind, resolve=resolve
         )
 
     definitions = results.get("definitions", [])
@@ -278,6 +282,13 @@ def usages(
             for defn in definitions:
                 click.echo(f"  {defn['file_path']}:{defn['line_start']}")
             click.echo()
+
+        if resolve and results.get("groups"):
+            click.echo()
+            for group in results["groups"]:
+                defn = group["definition"]
+                refs = group["references"]
+                click.echo(f"  {defn}: {len(refs)} references")
 
         if references:
             click.echo(f"{count_msg} ({ref_count} found):")

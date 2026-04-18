@@ -158,16 +158,34 @@ class SearchEngine:
         limit: int = 500,
         file_filter: str | None = None,
         kind: str | None = None,
+        resolve: bool = False,
     ) -> dict[str, Any]:
         usages = self.db.get_usages(symbol_name, limit=limit, file_filter=file_filter)
         total_count = self.db.get_usages_count(symbol_name, file_filter=file_filter)
         definitions = self.db.get_symbols_by_name(symbol_name, kind=kind)
-        return {
+
+        result = {
             "symbol": symbol_name,
             "definitions": definitions,
             "references": usages,
             "total_count": total_count,
         }
+
+        if resolve and definitions:
+            resolver = self._get_resolver()
+            groups: dict[str, list[dict[str, Any]]] = {}
+            for ref in usages:
+                resolved = resolver.resolve_symbol(symbol_name, ref["ref_file"])
+                if resolved:
+                    key = f"{resolved.get('scope', '')}.{resolved['name']} ({resolved['file_path']}:{resolved.get('line_start', '')})"
+                else:
+                    key = f"{symbol_name} (unresolved)"
+                groups.setdefault(key, []).append(ref)
+            result["groups"] = [
+                {"definition": defn_key, "references": refs} for defn_key, refs in groups.items()
+            ]
+
+        return result
 
     def search_inheritance(self, symbol_name: str, direction: str = "children") -> dict[str, Any]:
         result = {

@@ -423,3 +423,116 @@ class TestWildcardSearch:
         assert "UserService" in names
         assert "UnrelatedThing" not in names
         engine.close()
+
+
+class TestNamespaceResolve:
+    def test_search_usages_with_resolve(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="Tag",
+                kind="class",
+                file_path="/project/NsA/Tag.cs",
+                line_start=1,
+                line_end=10,
+                scope="NsA",
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="Tag",
+                kind="class",
+                file_path="/project/NsB/Tag.cs",
+                line_start=1,
+                line_end=10,
+                scope="NsB",
+            )
+        )
+        db.insert_references(
+            [
+                Reference("Tag", "/project/NsA/Tag.cs", "/project/consumer_a.cs", 5, 0, "usage"),
+                Reference("Tag", "/project/NsB/Tag.cs", "/project/consumer_b.cs", 10, 0, "usage"),
+            ]
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        result = engine.search_usages("Tag", limit=500, resolve=True)
+        assert "groups" in result
+        assert len(result["groups"]) >= 1
+        all_refs = []
+        for g in result["groups"]:
+            all_refs.extend(g["references"])
+        assert len(all_refs) == 2
+        engine.close()
+
+    def test_search_usages_without_resolve(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="Tag",
+                kind="class",
+                file_path="/project/NsA/Tag.cs",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.insert_references(
+            [
+                Reference("Tag", "/project/NsA/Tag.cs", "/project/consumer.cs", 5, 0, "usage"),
+            ]
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        result = engine.search_usages("Tag", limit=500, resolve=False)
+        assert "groups" not in result
+        engine.close()
+
+    def test_cli_usages_resolve_flag(self, temp_dir):
+        from click.testing import CliRunner
+        from ast_index.cli import cli
+        from ast_index.config import Config
+
+        config = Config(root=temp_dir)
+        db = Database(config.db_path)
+        db.insert_symbol(
+            Symbol(
+                name="Tag",
+                kind="class",
+                file_path="/project/NsA/Tag.cs",
+                line_start=1,
+                line_end=5,
+                scope="NsA",
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="Tag",
+                kind="class",
+                file_path="/project/NsB/Tag.cs",
+                line_start=1,
+                line_end=5,
+                scope="NsB",
+            )
+        )
+        db.insert_references(
+            [
+                Reference("Tag", "/project/NsA/Tag.cs", "/project/consumer.cs", 5, 0, "usage"),
+                Reference("Tag", "/project/NsB/Tag.cs", "/project/consumer.cs", 10, 0, "usage"),
+            ]
+        )
+        db.close()
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            [
+                "usages",
+                "Tag",
+                "--root",
+                str(temp_dir),
+                "--resolve",
+            ],
+        )
+        assert result.exit_code == 0
