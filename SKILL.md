@@ -62,22 +62,28 @@ Clears existing index and performs complete reindexing. Use after major refactor
 
 ### 5. **search** - Find symbols by name/pattern
 ```bash
-ast-index search [QUERY] [--level exact|prefix|fuzzy] [--limit N] [--case-sensitive] [--file PATH]
+ast-index search [QUERY] [--level exact|prefix|fuzzy] [--limit N] [--case-sensitive] [--file PATH] [--kind KIND]
 ```
 If QUERY is not provided, lists all symbols. Empty queries are rejected with a helpful message.
 
 Options:
-- `--case-sensitive` - Case-sensitive matching (uses COLLATE BINARY)
-- `--file PATH` - Filter results by file path substring
+- `--case-sensitive` - Case-sensitive matching (uses COLLATE BINARY + PRAGMA case_sensitive_like)
+- `--file PATH` - Filter results by file path substring (cross-platform, normalizes `/` and `\`)
+- `--kind KIND` - Filter by symbol kind (class, method, function, etc.)
 - Use quotes around wildcard patterns: `ast-index search "*Service"`
 
 ### 6. **usages** - Find all symbol usages/references
 ```bash
-ast-index usages [SYMBOL] [--show-context] [--file PATH] [--limit N]
+ast-index usages [SYMBOL] [--show-context] [--file PATH] [--limit N] [--kind KIND] [--resolve]
 ```
-If SYMBOL is not provided, shows most referenced symbols (top-N). Default limit is 500.
+If SYMBOL is not provided, shows most referenced symbols (top-N, capped at 50). Default limit is 500.
 
-With `--show-context`, matching symbols are highlighted with `>>>symbol<<<` in the output.
+Options:
+- `--show-context` - Show code lines with `>>>symbol<<<` highlighting
+- `--file PATH` - Filter references by file path substring
+- `--limit N` - Maximum references to return (default 500)
+- `--kind KIND` - Filter definitions by symbol kind (class, method, etc.)
+- `--resolve` - Group references by resolved definition (namespace-aware)
 
 ### 7. **inheritance** - Show inheritance hierarchy
 ```bash
@@ -92,9 +98,9 @@ ast-index stats
 
 ### 9. **definition** - Find symbol definition with import resolution
 ```bash
-ast-index definition SYMBOL [--file PATH]
+ast-index definition SYMBOL [--file PATH] [--limit N]
 ```
-Shows all definitions when multiple matches exist. Use `--file` to resolve which definition when multiple exist.
+Shows all definitions when multiple matches exist. Use `--file` to resolve which definition when multiple exist. Use `--limit` to cap output when many definitions exist (e.g., common names like `Id`).
 
 ### 10. **class** - Search for class/interface definitions
 ```bash
@@ -108,10 +114,11 @@ ast-index file FILE_PATH [--root PATH] [--format text|json] [--limit N]
 ```
 Lists all symbols in a file with name, kind, line number, and parent.
 
-### 12. **methods** - List all methods
+### 12. **methods** - List all methods, or methods of a specific class
 ```bash
-ast-index methods [--limit N]
+ast-index methods [SYMBOL] [--limit N]
 ```
+If SYMBOL is provided, searches for methods matching that name. Without SYMBOL, lists all methods.
 
 ### 13. **functions** - List all functions
 ```bash
@@ -329,7 +336,7 @@ ast-index index     # Build initial index
 - **No import resolution:** May find references to symbols with same name from different modules
 - **No scope awareness:** Doesn't distinguish between local/remote symbols
 - **Language-specific:** Works best with CamelCase conventions
-- **False positives:** Some string literals/comments may match (partially mitigated)
+- **False positives:** Some string literals/comments may match (partially mitigated). Common method names (`close`, `get`, `set`, etc.) are automatically excluded.
 - **False negatives:** snake_case symbols without calls may be missed
 
 ### When to Use Other Tools
@@ -451,12 +458,15 @@ ast-index index                              # Index project
 ast-index search [QUERY]                     # Search symbols (all if no query)
 ast-index search "Query" --case-sensitive    # Case-sensitive search
 ast-index search "Query" --file "path/"      # Filter by file
+ast-index search "Query" --kind method       # Filter by kind
 ast-index usages [SYMBOL]                    # Find usages (top if no symbol)
 ast-index usages --show-context SYMBOL       # With context and highlighting
+ast-index usages --resolve SYMBOL            # Group by resolved definition
 ast-index class [NAME]                       # List/search classes
 ast-index file PATH                          # All symbols in file
 ast-index definition SYMBOL                  # Find definition(s)
-ast-index methods                            # List all methods
+ast-index definition SYMBOL --limit 10       # Limit definitions
+ast-index methods [SYMBOL]                      # List methods (filter by symbol)
 ast-index functions                          # List all functions
 ast-index interfaces                         # List all interfaces
 ast-index top                                # Most referenced symbols
