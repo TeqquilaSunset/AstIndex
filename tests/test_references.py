@@ -276,3 +276,19 @@ def test_excludes_common_method_names():
     )
     symbol_names = {r.symbol_name for r in refs}
     assert "close" not in symbol_names, f"'close' should be excluded as a common method name"
+
+
+def test_context_uses_stripped_content():
+    refs = extract_references_universal(
+        content='''def foo():
+    """This is a docstring with Symbol reference."""
+    MyClass()
+''',
+        file_path="test.py",
+        language="python",
+        defined_symbols={"MyClass"},
+    )
+    for ref in refs:
+        if ref.symbol_name == "MyClass":
+            assert "MyClass()" in ref.context
+        assert "docstring" not in (ref.context or "").lower() or ref.symbol_name != "Symbol"
