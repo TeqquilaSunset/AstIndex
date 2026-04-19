@@ -4,13 +4,16 @@
 Позволяет точно определить, на какой символ ссылается использование,
 учитывая using директивы (C#) и import statements (другие языки).
 """
+
 from typing import Any
+
+from .database import Database
 
 
 class SymbolResolver:
     """Разрешение символов с учётом импортов/usings."""
 
-    def __init__(self, db):
+    def __init__(self, db: Database) -> None:
         """
         Initialize resolver.
 
@@ -19,11 +22,7 @@ class SymbolResolver:
         """
         self.db = db
 
-    def resolve_symbol(
-        self,
-        symbol_name: str,
-        reference_file: str
-    ) -> dict[str, Any] | None:
+    def resolve_symbol(self, symbol_name: str, reference_file: str) -> dict[str, Any] | None:
         """
         Разрешить символ с учётом using директив.
 

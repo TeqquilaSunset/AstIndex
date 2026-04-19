@@ -1,6 +1,5 @@
 class UserService:
     def get_user(self):
-        # Используем внешний класс
-        repo = ExternalRepository()
+        repo = ExternalRepository()  # noqa: F821
         data = repo.fetch_data()
         return data

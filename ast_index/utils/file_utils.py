@@ -65,8 +65,8 @@ def scan_files(
     if isinstance(root, str):
         root = Path(root)
 
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirpath = Path(dirpath)
+    for dirpath_str, dirnames, filenames in os.walk(root):
+        dirpath = Path(dirpath_str)
 
         dirnames[:] = [d for d in dirnames if not should_skip_file(dirpath / d, excludes)]
 
@@ -83,4 +83,4 @@ def scan_files(
             if filepath.stat().st_size > MAX_FILE_SIZE:
                 continue
 
-            yield filepath, language
+            yield filepath.resolve(), language

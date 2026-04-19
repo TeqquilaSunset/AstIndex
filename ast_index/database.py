@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 import sqlite3
+from collections.abc import Generator
 from contextlib import contextmanager
+from types import TracebackType
 from typing import Any
 
-from .models import FileInfo, Inheritance, Reference, Symbol
+from .models import FileInfo, Inheritance, NamespaceMapping, Reference, Symbol
 
 
 class Database:
@@ -10,10 +14,10 @@ class Database:
 
     def __init__(self, db_path: str):
         self.db_path = db_path
-        self._conn: sqlite3.Connection | None = None
+        self._conn: sqlite3.Connection = None  # type: ignore[assignment]
         self._init_db()
 
-    def _init_db(self):
+    def _init_db(self) -> None:
         self._conn = sqlite3.connect(self.db_path, isolation_level=None)
         self._conn.row_factory = sqlite3.Row
 
@@ -25,7 +29,7 @@ class Database:
         self._create_tables()
         self._create_triggers()
 
-    def _create_tables(self):
+    def _create_tables(self) -> None:
         self._conn.executescript("""
             CREATE TABLE IF NOT EXISTS metadata (
                 key TEXT PRIMARY KEY,
@@ -103,24 +107,28 @@ class Database:
             CREATE INDEX IF NOT EXISTS idx_usings_namespace ON usings(namespace);
         """)
 
-    def _create_triggers(self):
+    def _create_triggers(self) -> None:
         self._conn.executescript("""
             CREATE TRIGGER IF NOT EXISTS symbols_ai AFTER INSERT ON symbols BEGIN
                 INSERT INTO symbols_fts(rowid, name) VALUES (new.id, new.name);
             END;
 
             CREATE TRIGGER IF NOT EXISTS symbols_ad AFTER DELETE ON symbols BEGIN
-                INSERT INTO symbols_fts(symbols_fts, rowid, name) VALUES('delete', old.id, old.name);
+                INSERT INTO symbols_fts(
+                    symbols_fts, rowid, name
+                ) VALUES('delete', old.id, old.name);
             END;
 
             CREATE TRIGGER IF NOT EXISTS symbols_au AFTER UPDATE ON symbols BEGIN
-                INSERT INTO symbols_fts(symbols_fts, rowid, name) VALUES('delete', old.id, old.name);
+                INSERT INTO symbols_fts(
+                    symbols_fts, rowid, name
+                ) VALUES('delete', old.id, old.name);
                 INSERT INTO symbols_fts(rowid, name) VALUES (new.id, new.name);
             END;
         """)
 
     @contextmanager
-    def transaction(self):
+    def transaction(self) -> Generator[None, None, None]:
         self._conn.execute("BEGIN TRANSACTION")
         try:
             yield
@@ -176,7 +184,7 @@ class Database:
                 symbol.scope,
             ),
         )
-        return cursor.lastrowid
+        return cursor.lastrowid  # type: ignore[return-value]
 
     def insert_symbols(self, symbols: list[Symbol]) -> None:
         if not symbols:
@@ -230,8 +238,17 @@ class Database:
             rows = self._conn.execute("SELECT * FROM symbols WHERE name = ?", (name,)).fetchall()
         return [dict(row) for row in rows]
 
-    def get_symbols_by_kind(self, kind: str) -> list[dict[str, Any]]:
-        rows = self._conn.execute("SELECT * FROM symbols WHERE kind = ?", (kind,)).fetchall()
+    def get_symbols_by_kind(self, kind: str, limit: int | None = None) -> list[dict[str, Any]]:
+        if limit is not None:
+            rows = self._conn.execute(
+                "SELECT * FROM symbols WHERE kind = ? ORDER BY name LIMIT ?",
+                (kind, limit),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM symbols WHERE kind = ? ORDER BY name",
+                (kind,),
+            ).fetchall()
         return [dict(row) for row in rows]
 
     def insert_inheritance(self, inheritance: Inheritance) -> None:
@@ -281,7 +298,10 @@ class Database:
     def insert_reference(self, reference: Reference) -> None:
         self._conn.execute(
             """
-            INSERT INTO refs (symbol_name, symbol_file, ref_file, ref_line, ref_col, ref_kind, context)
+            INSERT INTO refs (
+                symbol_name, symbol_file, ref_file,
+                ref_line, ref_col, ref_kind, context
+            )
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
             (
@@ -300,7 +320,10 @@ class Database:
             return
         self._conn.executemany(
             """
-            INSERT INTO refs (symbol_name, symbol_file, ref_file, ref_line, ref_col, ref_kind, context)
+            INSERT INTO refs (
+                symbol_name, symbol_file, ref_file,
+                ref_line, ref_col, ref_kind, context
+            )
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
             [
@@ -373,7 +396,7 @@ class Database:
             "references": references,
         }
 
-    def _clear_all(self):
+    def _clear_all(self) -> None:
         """Очистить все таблицы базы данных."""
         self._conn.execute("DELETE FROM symbols")
         self._conn.execute("DELETE FROM inheritance")
@@ -383,18 +406,23 @@ class Database:
         self._conn.execute("DELETE FROM metadata")
         self._conn.commit()
 
-    def close(self):
+    def close(self) -> None:
         if self._conn:
             self._conn.close()
-            self._conn = None
+            self._conn = None  # type: ignore[assignment]
 
-    def __enter__(self):
+    def __enter__(self) -> Database:
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         self.close()
 
-    def save_usings(self, file_path: str, namespace_mapping):
+    def save_usings(self, file_path: str, namespace_mapping: NamespaceMapping) -> None:
         """
         Сохранить using директивы для файла.
 
@@ -427,18 +455,7 @@ class Database:
                 (file_path, alias, target_ns),
             )
 
-    def get_usings_for_file(self, file_path: str):
-        """
-        Получить using директивы для файла.
-
-        Args:
-            file_path: Путь к файлу
-
-        Returns:
-            NamespaceMapping объект
-        """
-        from .models import NamespaceMapping
-
+    def get_usings_for_file(self, file_path: str) -> NamespaceMapping:
         cursor = self._conn.cursor()
         cursor.execute(
             "SELECT alias, namespace, is_static FROM usings WHERE file_path = ?", (file_path,)
@@ -461,13 +478,7 @@ class Database:
             file_path=file_path, aliases=aliases, imports=imports, static_imports=static_imports
         )
 
-    def delete_usings_for_file(self, file_path: str):
-        """
-        Удалить using директивы для файла.
-
-        Args:
-            file_path: Путь к файлу
-        """
+    def delete_usings_for_file(self, file_path: str) -> None:
         cursor = self._conn.cursor()
         cursor.execute("DELETE FROM usings WHERE file_path = ?", (file_path,))
         self._conn.commit()

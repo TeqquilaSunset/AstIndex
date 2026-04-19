@@ -1,6 +1,8 @@
-import pytest
-import tempfile
 import os
+import tempfile
+
+import pytest
+
 from ast_index.database import Database
 from ast_index.models import NamespaceMapping
 

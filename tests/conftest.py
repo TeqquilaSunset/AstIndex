@@ -1,7 +1,8 @@
-import pytest
+import shutil
 import tempfile
 from pathlib import Path
-import shutil
+
+import pytest
 
 from ast_index.config import Config
 from ast_index.database import Database
@@ -31,7 +32,7 @@ class DerivedClass(BaseClass):
     """Derived class."""
     def __init__(self, value: int):
         self.value = value
-    
+
     def get_value(self) -> int:
         return self.value
 
@@ -55,16 +56,16 @@ namespace Sample
     {
         void DoSomething();
     }
-    
+
     public class BaseClass
     {
         public virtual void BaseMethod() { }
     }
-    
+
     public class DerivedClass : BaseClass, ISample
     {
         public int Value { get; set; }
-        
+
         public void DoSomething()
         {
             Console.WriteLine("Done");
@@ -91,7 +92,7 @@ class DerivedClass extends BaseClass {
         super();
         this.value = value;
     }
-    
+
     getValue() {
         return this.value;
     }
@@ -123,12 +124,12 @@ class BaseClass {
 
 class DerivedClass extends BaseClass implements ISample {
     value: number;
-    
+
     constructor(value: number) {
         super();
         this.value = value;
     }
-    
+
     doSomething(): void {
         console.log("done");
     }

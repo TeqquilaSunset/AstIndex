@@ -15,7 +15,7 @@ class SearchEngine:
             config = load_config()
             self.db = Database(config.db_path)
 
-        self._resolver = None  # Lazy initialization
+        self._resolver: SymbolResolver | None = None
 
     def _get_resolver(self) -> SymbolResolver:
         """Get or create SymbolResolver instance."""
@@ -130,7 +130,8 @@ class SearchEngine:
                     )
                 else:
                     cursor = self.db._conn.execute(
-                        f"SELECT * FROM symbols WHERE name LIKE ? COLLATE BINARY{file_clause} LIMIT ?",
+                        f"SELECT * FROM symbols "
+                        f"WHERE name LIKE ? COLLATE BINARY{file_clause} LIMIT ?",
                         [f"%{query}%"] + file_params + [limit * 3],
                     )
             return self._deduplicate([dict(row) for row in cursor.fetchall()])[:limit]
@@ -278,7 +279,7 @@ class SearchEngine:
         return result
 
     def search_inheritance(self, symbol_name: str, direction: str = "children") -> dict[str, Any]:
-        result = {
+        result: dict[str, Any] = {
             "symbol": symbol_name,
             "children": [],
             "parents": [],
@@ -290,7 +291,8 @@ class SearchEngine:
         return result
 
     def search_by_kind(self, kind: str, limit: int = 100) -> list[dict[str, Any]]:
-        return self.db.get_symbols_by_kind(kind)[:limit]
+        results = self.db.get_symbols_by_kind(kind, limit=limit * 3)
+        return self._deduplicate(results)[:limit]
 
     def search_in_file(self, file_path: str, limit: int = 100) -> list[dict[str, Any]]:
         cursor = self.db._conn.execute(
@@ -366,11 +368,13 @@ class SearchEngine:
         )
         return [dict(row) for row in cursor.fetchall()]
 
-    def close(self):
+    def close(self) -> None:
         self.db.close()
 
-    def __enter__(self):
+    def __enter__(self) -> "SearchEngine":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: Any
+    ) -> None:
         self.close()

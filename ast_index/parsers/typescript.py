@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import tree_sitter_typescript as tstypescript
-from tree_sitter import Language, Parser
+from tree_sitter import Language, Node, Parser
 
 from ..models import FileInfo, Inheritance, ParsedFile, Symbol
 from .base import BaseParser
@@ -11,11 +13,11 @@ class TypeScriptParser(BaseParser):
     language = "typescript"
     extensions = [".ts", ".tsx"]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._parser: Parser | None = None
         self._language: Language | None = None
 
-    def _ensure_parser(self):
+    def _ensure_parser(self) -> None:
         if self._parser is None:
             self._language = Language(tstypescript.language_typescript())
             self._parser = Parser(self._language)
@@ -26,6 +28,7 @@ class TypeScriptParser(BaseParser):
     def parse(self, file_path: Path, content: bytes) -> ParsedFile:
         self._ensure_parser()
 
+        assert self._parser is not None
         tree = self._parser.parse(content)
         root = tree.root_node
 
@@ -57,14 +60,14 @@ class TypeScriptParser(BaseParser):
 
     def _walk_tree(
         self,
-        node,
+        node: Node,
         source: bytes,
         file_path: str,
-        symbols: list,
-        inheritances: list,
-        parent: str = None,
-        scope: str = None,
-    ):
+        symbols: list[Symbol],
+        inheritances: list[Inheritance],
+        parent: str | None = None,
+        scope: str | None = None,
+    ) -> None:
         node_type = node.type
 
         if node_type == "class_declaration":
@@ -86,8 +89,14 @@ class TypeScriptParser(BaseParser):
                 self._walk_tree(child, source, file_path, symbols, inheritances, parent, scope)
 
     def _process_class(
-        self, node, source: bytes, file_path: str, symbols: list, inheritances: list, scope: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        inheritances: list[Inheritance],
+        scope: str | None,
+    ) -> None:
         name = self._get_identifier_name(node, source)
         if not name:
             return
@@ -122,8 +131,14 @@ class TypeScriptParser(BaseParser):
                 self._walk_tree(child, source, file_path, symbols, inheritances, name, new_scope)
 
     def _process_interface(
-        self, node, source: bytes, file_path: str, symbols: list, inheritances: list, scope: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        inheritances: list[Inheritance],
+        scope: str | None,
+    ) -> None:
         name = self._get_identifier_name(node, source)
         if not name:
             return
@@ -162,7 +177,9 @@ class TypeScriptParser(BaseParser):
                             )
                         )
 
-    def _process_enum(self, node, source: bytes, file_path: str, symbols: list, scope: str):
+    def _process_enum(
+        self, node: Node, source: bytes, file_path: str, symbols: list[Symbol], scope: str | None
+    ) -> None:
         name = self._get_identifier_name(node, source)
         if not name:
             return
@@ -186,7 +203,9 @@ class TypeScriptParser(BaseParser):
             )
         )
 
-    def _process_type_alias(self, node, source: bytes, file_path: str, symbols: list, scope: str):
+    def _process_type_alias(
+        self, node: Node, source: bytes, file_path: str, symbols: list[Symbol], scope: str | None
+    ) -> None:
         name = self._get_identifier_name(node, source)
         if not name:
             return
@@ -221,8 +240,14 @@ class TypeScriptParser(BaseParser):
         )
 
     def _process_function(
-        self, node, source: bytes, file_path: str, symbols: list, parent: str, scope: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        parent: str | None,
+        scope: str | None,
+    ) -> None:
         name = self._get_identifier_name(node, source)
         if not name:
             return
@@ -247,8 +272,14 @@ class TypeScriptParser(BaseParser):
         )
 
     def _process_method(
-        self, node, source: bytes, file_path: str, symbols: list, parent: str, scope: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        parent: str | None,
+        scope: str | None,
+    ) -> None:
         name = self._get_property_name(node, source)
         if not name:
             return
@@ -273,8 +304,14 @@ class TypeScriptParser(BaseParser):
         )
 
     def _process_field(
-        self, node, source: bytes, file_path: str, symbols: list, parent: str, scope: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        parent: str | None,
+        scope: str | None,
+    ) -> None:
         name = self._get_property_name(node, source)
         if not name:
             return
@@ -304,8 +341,13 @@ class TypeScriptParser(BaseParser):
         )
 
     def _process_heritage(
-        self, node, source: bytes, file_path: str, child_name: str, inheritances: list
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        child_name: str,
+        inheritances: list[Inheritance],
+    ) -> None:
         for child in node.children:
             if child.type == "extends_clause":
                 for ext_child in child.children:
@@ -334,25 +376,25 @@ class TypeScriptParser(BaseParser):
                             )
                         )
 
-    def _get_identifier_name(self, node, source: bytes) -> str | None:
+    def _get_identifier_name(self, node: Node, source: bytes) -> str | None:
         for child in node.children:
             if child.type in ("identifier", "type_identifier"):
                 return self._get_text(child, source)
         return None
 
-    def _get_property_name(self, node, source: bytes) -> str | None:
+    def _get_property_name(self, node: Node, source: bytes) -> str | None:
         for child in node.children:
             if child.type in ("property_identifier", "identifier"):
                 return self._get_text(child, source)
         return None
 
-    def _find_child_by_type(self, node, child_type: str):
+    def _find_child_by_type(self, node: Node, child_type: str) -> Node | None:
         for child in node.children:
             if child.type == child_type:
                 return child
         return None
 
-    def _get_class_signature(self, node, source: bytes) -> str:
+    def _get_class_signature(self, node: Node, source: bytes) -> str:
         name = self._get_identifier_name(node, source) or ""
         sig = f"class {name}"
 
@@ -362,11 +404,11 @@ class TypeScriptParser(BaseParser):
 
         return sig
 
-    def _get_interface_signature(self, node, source: bytes) -> str:
+    def _get_interface_signature(self, node: Node, source: bytes) -> str:
         name = self._get_identifier_name(node, source) or ""
         return f"interface {name}"
 
-    def _get_function_signature(self, node, source: bytes) -> str:
+    def _get_function_signature(self, node: Node, source: bytes) -> str:
         name = self._get_identifier_name(node, source) or ""
         params = self._find_child_by_type(node, "formal_parameters")
         ret_type = self._find_child_by_type(node, "type_annotation")
@@ -379,7 +421,7 @@ class TypeScriptParser(BaseParser):
 
         return sig
 
-    def _get_method_signature(self, node, source: bytes) -> str:
+    def _get_method_signature(self, node: Node, source: bytes) -> str:
         name = self._get_property_name(node, source) or ""
         params = self._find_child_by_type(node, "formal_parameters")
         ret_type = self._find_child_by_type(node, "type_annotation")

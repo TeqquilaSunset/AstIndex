@@ -4,14 +4,13 @@
 Проверяют функциональность извлечения ссылок из исходного кода.
 """
 
-import pytest
-from ast_index.references import (
-    strip_comments,
-    remove_string_literals,
-    is_excluded_symbol,
-    extract_references_universal,
-)
 from ast_index.reference_keywords import PYTHON_KEYWORDS, PYTHON_STANDARD_TYPES
+from ast_index.references import (
+    extract_references_universal,
+    is_excluded_symbol,
+    remove_string_literals,
+    strip_comments,
+)
 
 
 class TestStripComments:
@@ -57,7 +56,7 @@ class TestStripComments:
     def test_strip_comments_empty_content(self):
         """Тест с пустым содержимым."""
         assert strip_comments("", "python") == ""
-        assert strip_comments(None, "python") == None
+        assert strip_comments(None, "python") is None
 
     def test_strip_comments_preserves_code(self):
         """Тест что код без комментариев не изменяется."""
@@ -275,7 +274,7 @@ def test_excludes_common_method_names():
         content=line, file_path="test.py", language="python", defined_symbols=defined_symbols
     )
     symbol_names = {r.symbol_name for r in refs}
-    assert "close" not in symbol_names, f"'close' should be excluded as a common method name"
+    assert "close" not in symbol_names, "'close' should be excluded as a common method name"
 
 
 def test_context_uses_stripped_content():

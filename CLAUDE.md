@@ -48,6 +48,7 @@ mypy ast_index
   - `get_usages(symbol_name, limit=None, file_filter=None)` - SQL-level limit and file filtering
   - `get_usages_count(symbol_name, file_filter=None)` - total count for pagination display
   - `get_symbols_by_name(name, kind=None)` - optional kind filtering
+  - `get_symbols_by_kind(kind, limit=None)` - optional SQL-level limit with `ORDER BY name`
   - `get_stats()` uses `COUNT(DISTINCT file_path)` from symbols table for accurate file counts
 
 - **Parallel Indexer** (`ast_index/parallel_indexer.py`): Parse-parallel/write-sequential pattern
@@ -76,6 +77,7 @@ mypy ast_index
   - Wildcard search: strips trailing `*` from query for FTS prefix matching
   - Dot-path search: `Api.Source.SourceMeta` splits into name + namespace hint, filters by scope/file_path
   - `--kind` filter threads through all search levels (exact, prefix, fuzzy)
+  - `search_by_kind()` uses over-query + deduplication pattern (consistent with other search methods)
   - `search_usages(resolve=True)` groups references by resolved definition via SymbolResolver
 
 - **CLI** (`ast_index/cli.py`): Click-based command interface
@@ -135,10 +137,18 @@ mypy ast_index
 
 ### Data Flow
 
-1. **Indexing**: Scan files → Parse in parallel → Collect ParsedFile results → Write to SQLite in single transaction
-2. **Searching**: Query → SearchEngine (3-level strategy) → Return results
+1. **Indexing**: Scan files (resolved paths) → Parse in parallel → Collect ParsedFile results → Write to SQLite in single transaction
+2. **Searching**: Query → SearchEngine (3-level strategy) → Deduplicate → Return results
 3. **References**: Query symbol name → Database lookup in `refs` table → Return all usages with context
 4. **Updates**: Compare file mtimes → Parse changed files → Update database incrementally
+
+### Path Consistency
+
+All paths are canonicalized to absolute resolved paths at the source:
+- `Config.__post_init__` calls `self.root.resolve()` to ensure root is absolute
+- `scan_files()` yields `filepath.resolve()` for every file
+- `get_file_info()` uses `str(path.resolve())` for file metadata
+- This eliminates duplicate symbols from relative/absolute path mismatches
 
 ### Language Parsers
 

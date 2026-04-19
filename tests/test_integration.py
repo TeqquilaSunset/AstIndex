@@ -1,7 +1,5 @@
 """End-to-end integration tests for AST Index."""
 
-import pytest
-from pathlib import Path
 
 from ast_index.config import Config
 from ast_index.database import Database
@@ -15,7 +13,7 @@ class TestDatabaseIntegration:
 
     def test_database_create_and_query(self, database):
         """Test basic database operations."""
-        from ast_index.models import FileInfo, Symbol
+        from ast_index.models import FileInfo
 
         file_info = FileInfo(
             path="/test/file.py",
@@ -173,6 +171,7 @@ class TestSearchIntegration:
     def test_cli_usages_command_with_file_filter(self, config, sample_python_file, tmp_path):
         """Test CLI usages command with --file filter."""
         from click.testing import CliRunner
+
         from ast_index.cli import cli
 
         with Indexer(config=config) as indexer:
@@ -193,6 +192,7 @@ class TestSearchIntegration:
     def test_cli_usages_command_with_show_context(self, config, sample_python_file, tmp_path):
         """Test CLI usages command with --show-context."""
         from click.testing import CliRunner
+
         from ast_index.cli import cli
 
         with Indexer(config=config) as indexer:
@@ -209,6 +209,7 @@ class TestSearchIntegration:
     def test_cli_usages_command_with_limit_and_context(self, config, sample_python_file, tmp_path):
         """Test CLI usages command with --limit and --show-context together."""
         from click.testing import CliRunner
+
         from ast_index.cli import cli
 
         with Indexer(config=config) as indexer:
@@ -227,11 +228,11 @@ class TestSearchIntegration:
         """Test that indexing doesn't create duplicate symbols."""
         # Index once
         with Indexer(config=config) as indexer:
-            stats1 = indexer.index()
+            indexer.index()
 
         # Index again (should update, not duplicate)
         with Indexer(config=config) as indexer:
-            stats2 = indexer.index()
+            indexer.index()
 
         # Check that we don't have duplicate symbols
         with Database(config.db_path) as db:
@@ -251,6 +252,7 @@ class TestSearchIntegration:
     def test_cli_rejects_negative_limit(self, config, sample_python_file):
         """Test that CLI rejects negative limit values."""
         from click.testing import CliRunner
+
         from ast_index.cli import cli
 
         with Indexer(config=config) as indexer:
@@ -302,9 +304,11 @@ class TestDefinitionCommand:
 
     def test_definition_command(self, config, sample_csharp_project):
         """Test CLI definition command."""
-        from click.testing import CliRunner
-        from ast_index.cli import cli
         import json
+
+        from click.testing import CliRunner
+
+        from ast_index.cli import cli
 
         with Indexer(config=config) as indexer:
             indexer.index()

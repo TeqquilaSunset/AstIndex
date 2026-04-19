@@ -140,6 +140,7 @@ class TestKindFilter:
 
     def test_cli_search_with_kind(self, temp_dir):
         from click.testing import CliRunner
+
         from ast_index.cli import cli
         from ast_index.config import Config
 
@@ -182,6 +183,7 @@ class TestKindFilter:
 
     def test_cli_usages_with_kind(self, temp_dir):
         from click.testing import CliRunner
+
         from ast_index.cli import cli
         from ast_index.config import Config
 
@@ -495,6 +497,7 @@ class TestNamespaceResolve:
 
     def test_cli_usages_resolve_flag(self, temp_dir):
         from click.testing import CliRunner
+
         from ast_index.cli import cli
         from ast_index.config import Config
 
@@ -897,6 +900,7 @@ class TestSearchFileFilterSQL:
 
     def test_cli_search_file_filter(self, temp_dir):
         from click.testing import CliRunner
+
         from ast_index.cli import cli
         from ast_index.config import Config
 
@@ -993,6 +997,7 @@ class TestSearchFileFilterSQL:
 class TestDefinitionLimit:
     def test_definition_with_limit(self, temp_dir):
         from click.testing import CliRunner
+
         from ast_index.cli import cli
         from ast_index.config import Config
 
@@ -1020,6 +1025,7 @@ class TestDefinitionLimit:
 
     def test_definition_without_limit_shows_all(self, temp_dir):
         from click.testing import CliRunner
+
         from ast_index.cli import cli
         from ast_index.config import Config
 
@@ -1047,6 +1053,7 @@ class TestDefinitionLimit:
 
     def test_definition_limit_json(self, temp_dir):
         from click.testing import CliRunner
+
         from ast_index.cli import cli
         from ast_index.config import Config
 
@@ -1079,6 +1086,7 @@ class TestDefinitionLimit:
 class TestUsagesNoSymbolCapped:
     def test_usages_no_symbol_caps_at_50(self, temp_dir):
         from click.testing import CliRunner
+
         from ast_index.cli import cli
         from ast_index.config import Config
 
@@ -1110,6 +1118,7 @@ class TestUsagesNoSymbolCapped:
 
     def test_usages_no_symbol_respects_lower_limit(self, temp_dir):
         from click.testing import CliRunner
+
         from ast_index.cli import cli
         from ast_index.config import Config
 

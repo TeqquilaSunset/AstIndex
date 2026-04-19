@@ -5,10 +5,10 @@
 для анализа кодовой базы и принятия решений.
 """
 
-from pathlib import Path
-from typing import List, Dict, Any
-import subprocess
 import json
+import subprocess
+from pathlib import Path
+from typing import Any
 
 
 class ASTIndexHelper:
@@ -17,7 +17,7 @@ class ASTIndexHelper:
     def __init__(self, project_root: str = "."):
         self.project_root = Path(project_root).resolve()
 
-    def run_command(self, cmd: List[str]) -> str:
+    def run_command(self, cmd: list[str]) -> str:
         """Выполнить CLI команду и вернуть вывод"""
         full_cmd = ["ast-index"] + cmd
         result = subprocess.run(
@@ -29,17 +29,17 @@ class ASTIndexHelper:
         )
         return result.stdout
 
-    def index_project(self) -> Dict[str, int]:
+    def index_project(self) -> dict[str, int]:
         """Индексировать проект"""
         output = self.run_command(["index", "--root", str(self.project_root), "--format", "json"])
         return json.loads(output)
 
-    def update_index(self) -> Dict[str, int]:
+    def update_index(self) -> dict[str, int]:
         """Обновить индекс (инкрементально)"""
         output = self.run_command(["update", "--root", str(self.project_root), "--format", "json"])
         return json.loads(output)
 
-    def find_usages(self, symbol: str, show_context: bool = False) -> List[Dict]:
+    def find_usages(self, symbol: str, show_context: bool = False) -> list[dict]:
         """Найти все использования символа"""
         cmd = ["usages", symbol, "--root", str(self.project_root)]
         if show_context:
@@ -48,26 +48,26 @@ class ASTIndexHelper:
         # Парсим вывод (формат зависит от реализации)
         return self._parse_usages(output)
 
-    def search_symbols(self, query: str, level: str = "fuzzy", limit: int = 50) -> List[Dict]:
+    def search_symbols(self, query: str, level: str = "fuzzy", limit: int = 50) -> list[dict]:
         """Поиск символов по запросу"""
         cmd = ["search", query, "--root", str(self.project_root),
                "--level", level, "--limit", str(limit)]
         output = self.run_command(cmd)
         return self._parse_search_results(output)
 
-    def get_inheritance(self, symbol: str, direction: str = "both") -> List[Dict]:
+    def get_inheritance(self, symbol: str, direction: str = "both") -> list[dict]:
         """Получить иерархию наследования"""
         cmd = ["inheritance", symbol, "--root", str(self.project_root),
                "--direction", direction]
         output = self.run_command(cmd)
         return self._parse_inheritance(output)
 
-    def get_stats(self) -> Dict[str, int]:
+    def get_stats(self) -> dict[str, int]:
         """Получить статистику индекса"""
         output = self.run_command(["stats", "--root", str(self.project_root)])
         return self._parse_stats(output)
 
-    def _parse_usages(self, output: str) -> List[Dict]:
+    def _parse_usages(self, output: str) -> list[dict]:
         """Распарсить вывод usages"""
         lines = output.strip().split('\n')
         usages = []
@@ -82,7 +82,7 @@ class ASTIndexHelper:
                     })
         return usages
 
-    def _parse_search_results(self, output: str) -> List[Dict]:
+    def _parse_search_results(self, output: str) -> list[dict]:
         """Распарсить вывод search"""
         lines = output.strip().split('\n')
         results = []
@@ -92,12 +92,12 @@ class ASTIndexHelper:
                 results.append({'name': name})
         return results
 
-    def _parse_inheritance(self, output: str) -> List[Dict]:
+    def _parse_inheritance(self, output: str) -> list[dict]:
         """Распарсить вывод inheritance"""
         # Упрощённый парсинг
         return []
 
-    def _parse_stats(self, output: str) -> Dict[str, int]:
+    def _parse_stats(self, output: str) -> dict[str, int]:
         """Распарсить вывод stats"""
         stats = {}
         for line in output.strip().split('\n'):
@@ -115,7 +115,7 @@ class CodeAnalysisAgent:
     def __init__(self, project_root: str):
         self.ast = ASTIndexHelper(project_root)
 
-    def analyze_symbol_usage(self, symbol_name: str) -> Dict[str, Any]:
+    def analyze_symbol_usage(self, symbol_name: str) -> dict[str, Any]:
         """
         Анализ использования символа
 
@@ -149,7 +149,7 @@ class CodeAnalysisAgent:
 
         return report
 
-    def find_refactoring_candidates(self) -> List[Dict]:
+    def find_refactoring_candidates(self) -> list[dict]:
         """
         Найти кандидатов для рефакторинга
 
@@ -161,7 +161,7 @@ class CodeAnalysisAgent:
         print("🔍 Поиск кандидатов для рефакторинга")
 
         # 1. Получить статистику
-        stats = self.ast.get_stats()
+        self.ast.get_stats()
 
         # 2. Найти популярные символы (анализ usages)
         # Это упрощённый пример - в реальности нужно анализировать больше
@@ -173,7 +173,7 @@ class CodeAnalysisAgent:
 
         return candidates
 
-    def understand_codebase_structure(self) -> Dict[str, Any]:
+    def understand_codebase_structure(self) -> dict[str, Any]:
         """
         Понять структуру кодовой базы
 
@@ -194,7 +194,7 @@ class CodeAnalysisAgent:
 
         return structure
 
-    def impact_analysis(self, symbol_name: str) -> Dict[str, Any]:
+    def impact_analysis(self, symbol_name: str) -> dict[str, Any]:
         """
         Анализ влияния изменений символа
 
@@ -220,7 +220,7 @@ class CodeAnalysisAgent:
 
         return impact
 
-    def _generate_recommendations(self, usages: List[Dict]) -> List[str]:
+    def _generate_recommendations(self, usages: list[dict]) -> list[str]:
         """Генерировать рекомендации на основе использования"""
         recommendations = []
 
@@ -228,12 +228,12 @@ class CodeAnalysisAgent:
             recommendations.append("⚠️ Символ используется много раз - рассмотреть рефакторинг")
 
         # Анализ контекста
-        contexts = [u.get('context', '') for u in usages]
+        [u.get('context', '') for u in usages]
         # Здесь можно добавить больше анализа
 
         return recommendations
 
-    def _calculate_risk(self, usages: List[Dict], inheritance: List[Dict]) -> str:
+    def _calculate_risk(self, usages: list[dict], inheritance: list[dict]) -> str:
         """Рассчитать уровень риска изменений"""
         total_impact = len(usages) + len(inheritance) * 2
 

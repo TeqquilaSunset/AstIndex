@@ -1,5 +1,9 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from pathlib import Path
+
+from tree_sitter import Node
 
 from ..models import ParsedFile, Reference, Symbol
 from ..references import extract_references_universal
@@ -11,16 +15,16 @@ class BaseParser(ABC):
     language: str = ""
     extensions: list[str] = []
 
-    _registry: dict[str, type["BaseParser"]] = {}
+    _registry: dict[str, type[BaseParser]] = {}
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **kwargs: object) -> None:
         """Register subclasses automatically."""
         super().__init_subclass__(**kwargs)
         if cls.language:
             cls._registry[cls.language] = cls
 
     @classmethod
-    def get_parser(cls, language: str) -> type["BaseParser"] | None:
+    def get_parser(cls, language: str) -> type[BaseParser] | None:
         """Get parser class for a language."""
         return cls._registry.get(language)
 
@@ -40,10 +44,7 @@ class BaseParser(ABC):
         pass
 
     def extract_references(
-        self,
-        content: str,
-        file_path: str,
-        defined_symbols: list[Symbol]
+        self, content: str, file_path: str, defined_symbols: list[Symbol]
     ) -> list[Reference]:
         """
         Извлечь ссылки на символы (usages).
@@ -64,13 +65,13 @@ class BaseParser(ABC):
             content=content,
             file_path=file_path,
             language=self.language,
-            defined_symbols=defined_names
+            defined_symbols=defined_names,
         )
 
-    def _get_text(self, node, source: bytes) -> str:
+    def _get_text(self, node: Node, source: bytes) -> str:
         """Get text content of a node."""
         return source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
 
-    def _get_line_col(self, node) -> tuple:
+    def _get_line_col(self, node: Node) -> tuple[int, int]:
         """Get line and column for a node."""
         return (node.start_point[0] + 1, node.start_point[1])

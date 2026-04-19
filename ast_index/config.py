@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 DEFAULT_EXCLUDES = [
     "node_modules",
@@ -35,9 +35,10 @@ class Config:
         default_factory=lambda: ["python", "csharp", "javascript", "typescript"]
     )
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if isinstance(self.root, str):
             self.root = Path(self.root)
+        self.root = self.root.resolve()
         if self.database_path is None:
             self.database_path = str(self.root / ".ast-index.db")
 
@@ -99,7 +100,7 @@ def save_config(config: Config, path: Path | None = None) -> None:
     elif isinstance(path, str):
         path = Path(path)
 
-    data = {
+    data: dict[str, list[str] | str] = {
         "includes": config.includes,
         "excludes": config.excludes,
         "languages": config.languages,

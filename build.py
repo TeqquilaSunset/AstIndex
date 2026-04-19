@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Build script for AST Index CLI tool.
 
 Creates standalone executable for Windows.
 """
 
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -14,9 +12,9 @@ from pathlib import Path
 
 def run_command(cmd, description=""):
     """Run a command and print output."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Running: {description or cmd}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     result = subprocess.run(cmd, shell=True, capture_output=False, text=True)
     if result.returncode != 0:
         print(f"Error: {description} failed with return code {result.returncode}")
@@ -131,7 +129,8 @@ pip uninstall ast-index
 1. Make sure Python 3.10+ is in your PATH
 2. If tree-sitter parsers fail to load, reinstall dependencies:
    ```bash
-   pip install --upgrade tree-sitter tree-sitter-python tree-sitter-c-sharp tree-sitter-javascript tree-sitter-typescript
+   pip install --upgrade tree-sitter tree-sitter-python \
+       tree-sitter-c-sharp tree-sitter-javascript tree-sitter-typescript
    ```
 
 ## Features
@@ -150,9 +149,9 @@ pip uninstall ast-index
 
 def main():
     """Main build process."""
-    print("="*60)
+    print("=" * 60)
     print("AST Index Build Script")
-    print("="*60)
+    print("=" * 60)
 
     # Create dist directory
     Path("dist").mkdir(exist_ok=True)
@@ -170,9 +169,9 @@ def main():
     create_portable_script()
     create_readme()
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("Build Complete!")
-    print("="*60)
+    print("=" * 60)
     print("\nDistribution files created in dist/:")
     print("  - ast_index-0.1.1-py3-none-any.whl (Wheel package)")
     print("  - install.bat (Installation script)")

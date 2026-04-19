@@ -1,4 +1,3 @@
-import pytest
 from ast_index.namespace_resolution import extract_using_directives
 
 

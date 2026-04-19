@@ -1,8 +1,18 @@
 # AST Index
 
-**Version:** 0.7.0
+**Version:** 0.8.0
 
 A structural code search tool that indexes codebases using Abstract Syntax Tree (AST) analysis.
+
+## What's New in 0.8.0
+
+### Bug Fixes
+
+1. **Fixed duplicate symbols from relative/absolute paths** - `Config.__post_init__` now calls `self.root.resolve()`, and `scan_files()` yields `filepath.resolve()`. All symbols stored with canonical absolute paths.
+2. **Fixed `functions` returning 0 results without `--limit`** - `search_by_kind()` now uses SQL-level over-query + deduplication instead of fetching all rows.
+3. **Fixed `inheritance` showing empty results** - Root cause was duplicate paths; now returns correct hierarchy (e.g., 4 children of `BaseParser`).
+4. **241 mypy type errors resolved** - Complete type annotations across all 25 source files.
+5. **129 ruff lint errors resolved** - Fixed long lines, unused imports, sorting, comparisons, trailing whitespace.
 
 ## What's New in 0.7.0
 
@@ -96,7 +106,7 @@ pip install -e .
 
 ```bash
 cd /path/to/AstIndex/dist
-pip install ast_index-0.7.0-py3-none-any.whl
+pip install ast_index-0.8.0-py3-none-any.whl
 ```
 
 ## Usage

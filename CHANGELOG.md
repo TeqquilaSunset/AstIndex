@@ -5,7 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.0] - 2026-04-19
+## [0.8.0] - 2026-04-19
+
+### Fixed
+
+- **Duplicate symbols (relative + absolute paths)** - `Config.__post_init__` now calls `self.root.resolve()`, and `scan_files()` yields `filepath.resolve()`. All symbols are stored with canonical absolute paths, eliminating duplicate entries that appeared in `search`, `class`, `methods`, `definition`, `interfaces`, `functions` commands.
+- **`functions` returning 0 results without `--limit`** - `search_by_kind()` was fetching all rows via `get_symbols_by_kind()` without SQL `LIMIT` or `ORDER BY`, then slicing in Python with no deduplication. Now uses over-query (`limit * 3`) at SQL level with `ORDER BY name`, followed by `_deduplicate()` — matching the pattern of all other search methods.
+- **`inheritance BaseParser` showing empty results** - Root cause was the duplicate path issue: parser files were indexed with both relative and absolute paths. After fixing path canonicalization, inheritance queries return correct results (4 children: CSharpParser, PythonParser, JavaScriptParser, TypeScriptParser).
+- **241 mypy type errors resolved** - Added complete type annotations across all 25 source files: `database.py` (`_conn` type narrowed), `search.py` (`_resolver` typed as `SymbolResolver | None`), all 4 parsers (parameter/return types, `str | None` for optional params), `cli.py`, `config.py`, `indexer.py`, `parallel_indexer.py`, `symbol_resolution.py`, `utils/logging.py`, `utils/file_utils.py`.
+- **129 ruff lint errors resolved** - Fixed: long lines (SQL statements, docstrings, build script), unused imports, unsorted imports, `== True/False` comparisons in tests, trailing whitespace, missing newlines at EOF, `N806` state machine constants suppressed with `noqa`.
+
+### Changed
+
+- `Database.get_symbols_by_kind()` now accepts optional `limit` parameter with SQL-level `ORDER BY name LIMIT ?`.
+- `SearchEngine.search_by_kind()` now applies over-query + deduplication pattern consistent with all other search methods.
+- `scan_files()` yields resolved (`Path.resolve()`) paths to prevent relative/absolute path mismatches.
+- `Config.__post_init__` canonicalizes `self.root` via `.resolve()`.
 
 ### Fixed
 

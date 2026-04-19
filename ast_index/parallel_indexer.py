@@ -8,6 +8,7 @@ from .config import Config
 from .database import Database
 from .models import ParsedFile
 from .parsers import get_parser
+from .parsers.base import BaseParser
 from .utils.file_utils import djb2_hash, get_file_info
 from .utils.logging import get_logger
 
@@ -138,7 +139,7 @@ class ParallelIndexer:
             logger.error(f"Error parsing {file_path}: {e}")
             return None
 
-    def _get_parser(self, language: str):
+    def _get_parser(self, language: str) -> BaseParser | None:
         if language not in self._parsers:
             parser_cls = get_parser(language)
             if parser_cls:

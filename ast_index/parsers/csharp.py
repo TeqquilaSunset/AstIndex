@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import tree_sitter_c_sharp as tscs
-from tree_sitter import Language, Parser
+from tree_sitter import Language, Node, Parser
 
 from ..context_filters import should_exclude_context
 from ..generic_parser import extract_generic_types, get_generic_reference_candidates
@@ -14,11 +16,11 @@ class CSharpParser(BaseParser):
     language = "csharp"
     extensions = [".cs"]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._parser: Parser | None = None
         self._language: Language | None = None
 
-    def _ensure_parser(self):
+    def _ensure_parser(self) -> None:
         if self._parser is None:
             self._language = Language(tscs.language())
             self._parser = Parser(self._language)
@@ -29,6 +31,7 @@ class CSharpParser(BaseParser):
     def parse(self, file_path: Path, content: bytes) -> ParsedFile:
         self._ensure_parser()
 
+        assert self._parser is not None
         tree = self._parser.parse(content)
         root = tree.root_node
 
@@ -67,14 +70,14 @@ class CSharpParser(BaseParser):
 
     def _walk_tree(
         self,
-        node,
+        node: Node,
         source: bytes,
         file_path: str,
-        symbols: list,
-        inheritances: list,
-        parent: str = None,
-        scope: str = None,
-    ):
+        symbols: list[Symbol],
+        inheritances: list[Inheritance],
+        parent: str | None = None,
+        scope: str | None = None,
+    ) -> None:
         node_type = node.type
 
         if node_type == "class_declaration":
@@ -96,8 +99,14 @@ class CSharpParser(BaseParser):
                 self._walk_tree(child, source, file_path, symbols, inheritances, parent, scope)
 
     def _process_class(
-        self, node, source: bytes, file_path: str, symbols: list, inheritances: list, scope: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        inheritances: list[Inheritance],
+        scope: str | None,
+    ) -> None:
         name = self._get_identifier_name(node, source)
         if not name:
             return
@@ -125,8 +134,14 @@ class CSharpParser(BaseParser):
         self._process_body(node, source, file_path, symbols, inheritances, name, scope)
 
     def _process_interface(
-        self, node, source: bytes, file_path: str, symbols: list, inheritances: list, scope: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        inheritances: list[Inheritance],
+        scope: str | None,
+    ) -> None:
         name = self._get_identifier_name(node, source)
         if not name:
             return
@@ -154,8 +169,14 @@ class CSharpParser(BaseParser):
         self._process_body(node, source, file_path, symbols, inheritances, name, scope)
 
     def _process_struct(
-        self, node, source: bytes, file_path: str, symbols: list, inheritances: list, scope: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        inheritances: list[Inheritance],
+        scope: str | None,
+    ) -> None:
         name = self._get_identifier_name(node, source)
         if not name:
             return
@@ -182,7 +203,9 @@ class CSharpParser(BaseParser):
         self._process_inheritance(node, source, file_path, name, inheritances)
         self._process_body(node, source, file_path, symbols, inheritances, name, scope)
 
-    def _process_enum(self, node, source: bytes, file_path: str, symbols: list, scope: str):
+    def _process_enum(
+        self, node: Node, source: bytes, file_path: str, symbols: list[Symbol], scope: str | None
+    ) -> None:
         name = self._get_identifier_name(node, source)
         if not name:
             return
@@ -207,8 +230,14 @@ class CSharpParser(BaseParser):
         )
 
     def _process_method(
-        self, node, source: bytes, file_path: str, symbols: list, parent: str, scope: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        parent: str | None,
+        scope: str | None,
+    ) -> None:
         name = self._get_identifier_name(node, source)
         if not name:
             return
@@ -233,8 +262,14 @@ class CSharpParser(BaseParser):
         )
 
     def _process_property(
-        self, node, source: bytes, file_path: str, symbols: list, parent: str, scope: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        parent: str | None,
+        scope: str | None,
+    ) -> None:
         name = self._get_identifier_name(node, source)
         if not name:
             return
@@ -259,8 +294,14 @@ class CSharpParser(BaseParser):
         )
 
     def _process_field(
-        self, node, source: bytes, file_path: str, symbols: list, parent: str, scope: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        parent: str | None,
+        scope: str | None,
+    ) -> None:
         var_decl = self._find_child_by_type(node, "variable_declaration")
         if not var_decl:
             return
@@ -289,8 +330,13 @@ class CSharpParser(BaseParser):
                     )
 
     def _process_inheritance(
-        self, node, source: bytes, file_path: str, child_name: str, inheritances: list
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        child_name: str,
+        inheritances: list[Inheritance],
+    ) -> None:
         base_list = self._find_child_by_type(node, "base_list")
         if not base_list:
             return
@@ -310,36 +356,36 @@ class CSharpParser(BaseParser):
 
     def _process_body(
         self,
-        node,
+        node: Node,
         source: bytes,
         file_path: str,
-        symbols: list,
-        inheritances: list,
-        parent: str,
-        scope: str,
-    ):
+        symbols: list[Symbol],
+        inheritances: list[Inheritance],
+        parent: str | None,
+        scope: str | None,
+    ) -> None:
         body = self._find_child_by_type(node, "declaration_list")
         if body:
             new_scope = f"{scope}.{parent}" if scope else parent
             for child in body.children:
                 self._walk_tree(child, source, file_path, symbols, inheritances, parent, new_scope)
 
-    def _get_identifier_name(self, node, source: bytes) -> str | None:
+    def _get_identifier_name(self, node: Node, source: bytes) -> str | None:
         for child in node.children:
             if child.type == "identifier":
                 return self._get_text(child, source)
         return None
 
-    def _find_child_by_type(self, node, child_type: str):
+    def _find_child_by_type(self, node: Node, child_type: str) -> Node | None:
         for child in node.children:
             if child.type == child_type:
                 return child
         return None
 
-    def _get_text(self, node, source: bytes) -> str:
+    def _get_text(self, node: Node, source: bytes) -> str:
         return source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
 
-    def _get_type_signature(self, node, source: bytes, type_kind: str) -> str:
+    def _get_type_signature(self, node: Node, source: bytes, type_kind: str) -> str:
         modifiers = []
         for child in node.children:
             if child.type == "modifier":
@@ -355,7 +401,7 @@ class CSharpParser(BaseParser):
 
         return sig
 
-    def _get_method_signature(self, node, source: bytes) -> str:
+    def _get_method_signature(self, node: Node, source: bytes) -> str:
         name = self._get_identifier_name(node, source) or ""
         params = self._find_child_by_type(node, "parameter_list")
         ret_type = self._find_child_by_type(node, "type")
@@ -368,7 +414,7 @@ class CSharpParser(BaseParser):
 
         return sig
 
-    def _get_property_signature(self, node, source: bytes) -> str:
+    def _get_property_signature(self, node: Node, source: bytes) -> str:
         name = self._get_identifier_name(node, source) or ""
         prop_type = self._find_child_by_type(node, "type")
 
@@ -377,8 +423,12 @@ class CSharpParser(BaseParser):
         return name
 
     def extract_references(
-        self, content: str, file_path: str, defined_symbols: list, namespace_mapping=None
-    ) -> list:
+        self,
+        content: str,
+        file_path: str,
+        defined_symbols: list[Symbol],
+        namespace_mapping: object = None,
+    ) -> list[Reference]:
         """
         C#-специфичное извлечение ссылок.
 
@@ -392,7 +442,7 @@ class CSharpParser(BaseParser):
         from ..references import extract_references_universal
 
         defined_names = {sym.name for sym in defined_symbols}
-        all_references = []
+        all_references: list[Reference] = []
 
         # 1. Базовые ссылки (унаследовано)
         base_references = extract_references_universal(
@@ -461,8 +511,8 @@ class CSharpParser(BaseParser):
                     )
 
         # 3. Дедупликация
-        seen = set()
-        unique_references = []
+        seen: set[tuple[str, str, int, int]] = set()
+        unique_references: list[Reference] = []
         for ref in all_references:
             key = (ref.symbol_name, ref.ref_file, ref.ref_line, ref.ref_col)
             if key not in seen:

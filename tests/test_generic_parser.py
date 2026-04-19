@@ -1,5 +1,8 @@
-import pytest
-from ast_index.generic_parser import extract_generic_types, get_generic_reference_candidates, GenericType
+from ast_index.generic_parser import (
+    GenericType,
+    extract_generic_types,
+    get_generic_reference_candidates,
+)
 
 
 def test_extract_simple_generic():

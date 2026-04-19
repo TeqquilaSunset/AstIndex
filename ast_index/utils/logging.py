@@ -3,10 +3,9 @@ import sys
 
 
 def setup_logging(level: str = "INFO", log_file: str | None = None) -> None:
-    """Setup logging configuration."""
     log_level = getattr(logging, level.upper(), logging.INFO)
 
-    handlers = [logging.StreamHandler(sys.stderr)]
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)]
 
     if log_file:
         handlers.append(logging.FileHandler(log_file))

@@ -1,9 +1,7 @@
 """Tests for parallel indexing functionality."""
 
-import pytest
-from pathlib import Path
-from ast_index.parallel_indexer import ParallelIndexer
 from ast_index.config import Config
+from ast_index.parallel_indexer import ParallelIndexer
 
 
 class TestParallelIndexer:

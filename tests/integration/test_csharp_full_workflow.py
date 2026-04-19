@@ -1,9 +1,9 @@
+
 import pytest
-from pathlib import Path
 
 from ast_index.config import Config
-from ast_index.indexer import Indexer
 from ast_index.database import Database
+from ast_index.indexer import Indexer
 from ast_index.search import SearchEngine
 
 

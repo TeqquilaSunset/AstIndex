@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import tree_sitter_python as tspython
-from tree_sitter import Language, Parser
+from tree_sitter import Language, Node, Parser
 
 from ..models import FileInfo, Inheritance, ParsedFile, Symbol
 from .base import BaseParser
@@ -11,11 +13,11 @@ class PythonParser(BaseParser):
     language = "python"
     extensions = [".py", ".pyw"]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._parser: Parser | None = None
         self._language: Language | None = None
 
-    def _ensure_parser(self):
+    def _ensure_parser(self) -> None:
         if self._parser is None:
             self._language = Language(tspython.language())
             self._parser = Parser(self._language)
@@ -26,6 +28,7 @@ class PythonParser(BaseParser):
     def parse(self, file_path: Path, content: bytes) -> ParsedFile:
         self._ensure_parser()
 
+        assert self._parser is not None
         tree = self._parser.parse(content)
         root = tree.root_node
 
@@ -57,14 +60,14 @@ class PythonParser(BaseParser):
 
     def _walk_tree(
         self,
-        node,
+        node: Node,
         source: bytes,
         file_path: str,
-        symbols: list,
-        inheritances: list,
-        parent: str = None,
-        scope: str = None,
-    ):
+        symbols: list[Symbol],
+        inheritances: list[Inheritance],
+        parent: str | None = None,
+        scope: str | None = None,
+    ) -> None:
         """Walk the tree and extract symbols."""
         node_type = node.type
 
@@ -77,8 +80,14 @@ class PythonParser(BaseParser):
                 self._walk_tree(child, source, file_path, symbols, inheritances, parent, scope)
 
     def _process_class(
-        self, node, source: bytes, file_path: str, symbols: list, inheritances: list, scope: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        inheritances: list[Inheritance],
+        scope: str | None,
+    ) -> None:
         """Process a class definition."""
         name = self._get_name(node, source)
         if not name:
@@ -126,8 +135,14 @@ class PythonParser(BaseParser):
                 self._walk_tree(child, source, file_path, symbols, inheritances, name, new_scope)
 
     def _process_function(
-        self, node, source: bytes, file_path: str, symbols: list, parent: str, scope: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        parent: str | None,
+        scope: str | None,
+    ) -> None:
         """Process a function definition."""
         name = self._get_name(node, source)
         if not name:
@@ -154,25 +169,25 @@ class PythonParser(BaseParser):
             )
         )
 
-    def _get_name(self, node, source: bytes) -> str | None:
+    def _get_name(self, node: Node, source: bytes) -> str | None:
         """Get the name of a definition node."""
         for child in node.children:
             if child.type == "identifier":
                 return self._get_text(child, source)
         return None
 
-    def _find_child_by_type(self, node, child_type: str):
+    def _find_child_by_type(self, node: Node, child_type: str) -> Node | None:
         """Find a child node by type."""
         for child in node.children:
             if child.type == child_type:
                 return child
         return None
 
-    def _get_text(self, node, source: bytes) -> str:
+    def _get_text(self, node: Node, source: bytes) -> str:
         """Get text content of a node."""
         return source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
 
-    def _get_class_signature(self, node, source: bytes) -> str:
+    def _get_class_signature(self, node: Node, source: bytes) -> str:
         """Get class signature including bases."""
         parts = ["class"]
         name = self._get_name(node, source)
@@ -185,7 +200,7 @@ class PythonParser(BaseParser):
 
         return " ".join(parts)
 
-    def _get_function_signature(self, node, source: bytes) -> str:
+    def _get_function_signature(self, node: Node, source: bytes) -> str:
         """Get function signature including params and return type."""
         parts = ["def"]
         name = self._get_name(node, source)
@@ -202,7 +217,7 @@ class PythonParser(BaseParser):
 
         return " ".join(parts)
 
-    def _get_docstring(self, node, source: bytes) -> str | None:
+    def _get_docstring(self, node: Node, source: bytes) -> str | None:
         """Extract docstring from a node's body."""
         body = self._find_child_by_type(node, "block")
         if not body:

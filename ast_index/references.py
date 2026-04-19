@@ -55,10 +55,10 @@ def strip_comments(content: str, language: str) -> str:
     is_python = language_lower == "python"
 
     # State machine states
-    NORMAL = 0
-    SINGLE_LINE_COMMENT = 1  # Python # or C-style //
-    MULTI_LINE_COMMENT = 2  # /* */
-    PYTHON_DOCSTRING = 3  # """ or '''
+    NORMAL = 0  # noqa: N806
+    SINGLE_LINE_COMMENT = 1  # noqa: N806
+    MULTI_LINE_COMMENT = 2  # noqa: N806
+    PYTHON_DOCSTRING = 3  # noqa: N806
 
     result = []
     i = 0
@@ -147,12 +147,12 @@ def remove_string_literals(content: str) -> str:
     n = len(content)
 
     # States
-    NORMAL = 0
-    IN_DOUBLE_QUOTE = 1
-    IN_SINGLE_QUOTE = 2
-    IN_CSHARP_VERBATIM = 3  # @"..."
-    IN_PYTHON_TRIPLE_DOUBLE = 4  # """..."""
-    IN_PYTHON_TRIPLE_SINGLE = 5  # '''...'''
+    NORMAL = 0  # noqa: N806
+    IN_DOUBLE_QUOTE = 1  # noqa: N806
+    IN_SINGLE_QUOTE = 2  # noqa: N806
+    IN_CSHARP_VERBATIM = 3  # noqa: N806
+    IN_PYTHON_TRIPLE_DOUBLE = 4  # noqa: N806
+    IN_PYTHON_TRIPLE_SINGLE = 5  # noqa: N806
 
     state = NORMAL
     escape_next = False

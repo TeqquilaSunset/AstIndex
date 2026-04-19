@@ -8,6 +8,7 @@ from .constants import BATCH_SIZE
 from .database import Database
 from .models import ParsedFile
 from .parsers import get_parser
+from .parsers.base import BaseParser
 from .utils.file_utils import djb2_hash, get_file_info, scan_files
 from .utils.logging import get_logger
 
@@ -32,26 +33,26 @@ class Indexer:
         self.use_parallel = use_parallel  # Use parallel indexing by default
         self.max_workers = max_workers or os.cpu_count() or 4
 
-    def _get_parser(self, language: str):
+    def _get_parser(self, language: str) -> BaseParser | None:
         if language not in self._parsers:
             parser_cls = get_parser(language)
             if parser_cls:
                 self._parsers[language] = parser_cls()
         return self._parsers.get(language)
 
-    def index(self) -> dict[str, int]:
+    def index(self) -> dict[str, int | float]:
         """Index project with optional parallel processing."""
         if self.use_parallel:
             return self.index_parallel()
         else:
             return self.index_sequential()
 
-    def index_sequential(self) -> dict[str, int]:
+    def index_sequential(self) -> dict[str, int | float]:
         """Sequential indexing (original implementation)."""
         logger.info(f"Starting full index of {self.config.root} (sequential)")
         start_time = time.time()
 
-        stats = {
+        stats: dict[str, int | float] = {
             "files_indexed": 0,
             "symbols_indexed": 0,
             "inheritances_indexed": 0,
@@ -86,7 +87,7 @@ class Indexer:
 
         return stats
 
-    def index_parallel(self) -> dict[str, int]:
+    def index_parallel(self) -> dict[str, int | float]:
         """Parallel indexing using ThreadPoolExecutor."""
         from .parallel_indexer import ParallelIndexer
 
@@ -102,8 +103,7 @@ class Indexer:
             )
         )
 
-        # Progress callback
-        def progress_callback(current: int, total: int):
+        def progress_callback(current: int, total: int) -> None:
             if total > 0:
                 percentage = (current / total) * 100
                 if current % 100 == 0 or current == total:  # Log every 100 files
@@ -114,8 +114,8 @@ class Indexer:
             config=self.config, max_workers=self.max_workers, progress_callback=progress_callback
         )
 
-        # Index files in parallel
-        stats = parallel_indexer.index_files_parallel(files_list)
+        parallel_stats = parallel_indexer.index_files_parallel(files_list)
+        stats: dict[str, int | float] = dict(parallel_stats)
 
         # Update metadata
         self.db.set_metadata("last_index_time", str(time.time()))
@@ -127,11 +127,11 @@ class Indexer:
 
         return stats
 
-    def update(self) -> dict[str, int]:
+    def update(self) -> dict[str, int | float]:
         logger.info(f"Starting incremental update of {self.config.root}")
         start_time = time.time()
 
-        stats = {
+        stats: dict[str, int | float] = {
             "files_added": 0,
             "files_modified": 0,
             "files_deleted": 0,
@@ -199,7 +199,7 @@ class Indexer:
 
         return stats
 
-    def rebuild(self) -> dict[str, int]:
+    def rebuild(self) -> dict[str, int | float]:
         logger.info(f"Rebuilding index for {self.config.root}")
 
         self._clear_all()
@@ -254,7 +254,7 @@ class Indexer:
             logger.error(f"Error parsing {file_path}: {e}")
             return None
 
-    def _store_parsed_file(self, parsed: ParsedFile):
+    def _store_parsed_file(self, parsed: ParsedFile) -> None:
         file_info = parsed.file_info
 
         self.db.delete_symbols_for_file(file_info.path)
@@ -273,27 +273,32 @@ class Indexer:
         if hasattr(parsed, "namespace_mapping") and parsed.namespace_mapping:
             self.db.save_usings(file_info.path, parsed.namespace_mapping)
 
-    def _delete_file(self, path: str):
+    def _delete_file(self, path: str) -> None:
         self.db.delete_symbols_for_file(path)
         self.db.delete_inheritance_for_file(path)
         self.db.delete_refs_for_file(path)
         self.db.delete_file(path)
 
-    def _clear_all(self):
+    def _clear_all(self) -> None:
         self.db._clear_all()
 
-    def _merge_stats(self, stats: dict[str, int], batch_stats: dict[str, int]):
+    def _merge_stats(self, stats: dict[str, int | float], batch_stats: dict[str, int]) -> None:
         for key, value in batch_stats.items():
             if key in stats:
                 stats[key] += value
             else:
                 stats[key] = value
 
-    def close(self):
+    def close(self) -> None:
         self.db.close()
 
-    def __enter__(self):
+    def __enter__(self) -> "Indexer":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any | None,
+    ) -> None:
         self.close()

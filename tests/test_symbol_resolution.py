@@ -1,9 +1,8 @@
 """Tests for symbol resolution module."""
 
-import pytest
-from ast_index.symbol_resolution import SymbolResolver
 from ast_index.database import Database
 from ast_index.models import Symbol
+from ast_index.symbol_resolution import SymbolResolver
 
 
 def test_resolve_symbol_with_usings(db_path, sample_csharp_project):
@@ -101,8 +100,8 @@ def test_resolve_symbol_multiple_candidates(db_path):
 
 def test_get_symbols_by_name_and_namespace(db_path):
     """Test getting symbols filtered by namespace."""
-    from ast_index.models import Symbol
     from ast_index.database import Database
+    from ast_index.models import Symbol
 
     db = Database(db_path)
 

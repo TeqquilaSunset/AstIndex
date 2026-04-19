@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import tree_sitter_javascript as tsjs
-from tree_sitter import Language, Parser
+from tree_sitter import Language, Node, Parser
 
 from ..models import FileInfo, Inheritance, ParsedFile, Symbol
 from .base import BaseParser
@@ -11,11 +13,11 @@ class JavaScriptParser(BaseParser):
     language = "javascript"
     extensions = [".js", ".jsx", ".mjs", ".cjs"]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._parser: Parser | None = None
         self._language: Language | None = None
 
-    def _ensure_parser(self):
+    def _ensure_parser(self) -> None:
         if self._parser is None:
             self._language = Language(tsjs.language())
             self._parser = Parser(self._language)
@@ -26,6 +28,7 @@ class JavaScriptParser(BaseParser):
     def parse(self, file_path: Path, content: bytes) -> ParsedFile:
         self._ensure_parser()
 
+        assert self._parser is not None
         tree = self._parser.parse(content)
         root = tree.root_node
 
@@ -57,14 +60,14 @@ class JavaScriptParser(BaseParser):
 
     def _walk_tree(
         self,
-        node,
+        node: Node,
         source: bytes,
         file_path: str,
-        symbols: list,
-        inheritances: list,
-        parent: str = None,
-        scope: str = None,
-    ):
+        symbols: list[Symbol],
+        inheritances: list[Inheritance],
+        parent: str | None = None,
+        scope: str | None = None,
+    ) -> None:
         node_type = node.type
 
         if node_type == "class_declaration":
@@ -82,8 +85,14 @@ class JavaScriptParser(BaseParser):
                 self._walk_tree(child, source, file_path, symbols, inheritances, parent, scope)
 
     def _process_class(
-        self, node, source: bytes, file_path: str, symbols: list, inheritances: list, scope: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        inheritances: list[Inheritance],
+        scope: str | None,
+    ) -> None:
         name = self._get_identifier_name(node, source)
         if not name:
             return
@@ -140,8 +149,15 @@ class JavaScriptParser(BaseParser):
                 self._walk_tree(child, source, file_path, symbols, inheritances, name, new_scope)
 
     def _process_function(
-        self, node, source: bytes, file_path: str, symbols: list, parent: str, scope: str, kind: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        parent: str | None,
+        scope: str | None,
+        kind: str,
+    ) -> None:
         name = self._get_identifier_name(node, source)
         if not name:
             return
@@ -166,13 +182,25 @@ class JavaScriptParser(BaseParser):
         )
 
     def _process_arrow_function(
-        self, node, source: bytes, file_path: str, symbols: list, parent: str, scope: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        parent: str | None,
+        scope: str | None,
+    ) -> None:
         pass
 
     def _process_method(
-        self, node, source: bytes, file_path: str, symbols: list, parent: str, scope: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        parent: str | None,
+        scope: str | None,
+    ) -> None:
         name = self._get_property_name(node, source)
         if not name:
             return
@@ -197,8 +225,14 @@ class JavaScriptParser(BaseParser):
         )
 
     def _process_variable_declarator(
-        self, node, source: bytes, file_path: str, symbols: list, parent: str, scope: str
-    ):
+        self,
+        node: Node,
+        source: bytes,
+        file_path: str,
+        symbols: list[Symbol],
+        parent: str | None,
+        scope: str | None,
+    ) -> None:
         name = self._get_identifier_name(node, source)
         if not name:
             return
@@ -224,25 +258,25 @@ class JavaScriptParser(BaseParser):
                 )
             )
 
-    def _get_identifier_name(self, node, source: bytes) -> str | None:
+    def _get_identifier_name(self, node: Node, source: bytes) -> str | None:
         for child in node.children:
             if child.type == "identifier":
                 return self._get_text(child, source)
         return None
 
-    def _get_property_name(self, node, source: bytes) -> str | None:
+    def _get_property_name(self, node: Node, source: bytes) -> str | None:
         for child in node.children:
             if child.type == "property_identifier":
                 return self._get_text(child, source)
         return None
 
-    def _find_child_by_type(self, node, child_type: str):
+    def _find_child_by_type(self, node: Node, child_type: str) -> Node | None:
         for child in node.children:
             if child.type == child_type:
                 return child
         return None
 
-    def _get_class_signature(self, node, source: bytes) -> str:
+    def _get_class_signature(self, node: Node, source: bytes) -> str:
         name = self._get_identifier_name(node, source) or ""
         sig = f"class {name}"
 
@@ -253,7 +287,7 @@ class JavaScriptParser(BaseParser):
 
         return sig
 
-    def _get_function_signature(self, node, source: bytes) -> str:
+    def _get_function_signature(self, node: Node, source: bytes) -> str:
         name = self._get_identifier_name(node, source) or ""
         params = self._find_child_by_type(node, "formal_parameters")
 
@@ -263,7 +297,7 @@ class JavaScriptParser(BaseParser):
 
         return sig
 
-    def _get_method_signature(self, node, source: bytes) -> str:
+    def _get_method_signature(self, node: Node, source: bytes) -> str:
         name = self._get_property_name(node, source) or ""
         params = self._find_child_by_type(node, "formal_parameters")
 
@@ -273,7 +307,7 @@ class JavaScriptParser(BaseParser):
 
         return sig
 
-    def _get_arrow_function_signature(self, name: str, node, source: bytes) -> str:
+    def _get_arrow_function_signature(self, name: str, node: Node, source: bytes) -> str:
         params = self._find_child_by_type(node, "formal_parameters")
 
         sig = f"{name} = "

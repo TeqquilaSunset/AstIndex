@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any
 
 import click
 
@@ -10,14 +11,14 @@ from .indexer import Indexer
 from .search import SearchEngine
 
 
-def validate_limit(ctx, param, value):
+def validate_limit(ctx: click.Context, param: click.Parameter, value: int | None) -> int | None:
     """Validate that limit is a positive integer."""
     if value is not None and value <= 0:
         raise click.BadParameter("Limit must be a positive integer")
     return value
 
 
-def output_result(result, format: str, message: str = None):
+def output_result(result: Any, format: str, message: str | None = None) -> None:
     if format == "json":
         click.echo(json.dumps(result, indent=2, default=str))
     else:
@@ -47,7 +48,7 @@ def output_result(result, format: str, message: str = None):
 
 @click.group()
 @click.version_option(version=__version__)
-def cli():
+def cli() -> None:
     """AST Index - Structural code search tool."""
     pass
 
@@ -59,19 +60,17 @@ def cli():
     "--jobs", "-j", type=int, default=None, help="Number of parallel jobs (default: CPU count)"
 )
 @click.option("--no-parallel", is_flag=True, help="Disable parallel processing")
-def index(root: str, format: str, jobs: int | None, no_parallel: bool):
+def index(root: str, format: str, jobs: int | None, no_parallel: bool) -> None:
     """Index the project."""
     config = load_config(Path(root))
 
-    # Determine if parallel processing should be used
     use_parallel = not no_parallel
 
-    # Prepare indexer kwargs
-    indexer_kwargs = {"config": config, "use_parallel": use_parallel}
-    if jobs and use_parallel:
-        indexer_kwargs["max_workers"] = jobs
-
-    with Indexer(**indexer_kwargs) as indexer:
+    with Indexer(
+        config=config,
+        use_parallel=use_parallel,
+        max_workers=jobs if jobs and use_parallel else None,
+    ) as indexer:
         stats = indexer.index()
 
     elapsed = stats.pop("elapsed_time", None)
@@ -90,7 +89,7 @@ def index(root: str, format: str, jobs: int | None, no_parallel: bool):
 @cli.command()
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
-def update(root: str, format: str):
+def update(root: str, format: str) -> None:
     """Update index (incremental)."""
     config = load_config(Path(root))
 
@@ -113,7 +112,7 @@ def update(root: str, format: str):
 @cli.command()
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
-def rebuild(root: str, format: str):
+def rebuild(root: str, format: str) -> None:
     """Rebuild index from scratch."""
     config = load_config(Path(root))
 
@@ -158,7 +157,7 @@ def search(
     file_filter: str | None,
     case_sensitive: bool,
     kind: str | None,
-):
+) -> None:
     """Search for symbols by name. If QUERY is not provided, lists all symbols.
 
     Use quotes around patterns with wildcards to prevent shell expansion:
@@ -194,7 +193,7 @@ def search(
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
 @click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
-def search_class(name: str | None, root: str, format: str, limit: int):
+def search_class(name: str | None, root: str, format: str, limit: int) -> None:
     """Search for class/interface definitions. If NAME is not provided, lists all classes."""
     config = load_config(Path(root))
 
@@ -227,7 +226,7 @@ def usages(
     file: str | None,
     kind: str | None,
     resolve: bool,
-):
+) -> None:
     """Find all usages of a symbol. If SYMBOL is not provided, shows most referenced symbols."""
     config = load_config(Path(root))
 
@@ -250,13 +249,13 @@ def usages(
                     click.echo(f"  {ref_count:4d} - {item['name']} ({item['kind']}) [{files_str}]")
             return
 
-        results = engine.search_usages(
+        usages_result: dict[str, Any] = engine.search_usages(
             symbol, limit=limit, file_filter=file if file else None, kind=kind, resolve=resolve
         )
 
-    definitions = results.get("definitions", [])
-    total_count = results.get("total_count", len(results["references"]))
-    ref_count = len(results["references"])
+    definitions = usages_result.get("definitions", [])
+    total_count = usages_result.get("total_count", len(usages_result["references"]))
+    ref_count = len(usages_result["references"])
 
     if len(definitions) > 10:
         click.echo(
@@ -270,10 +269,10 @@ def usages(
         count_msg = f"Usages of {symbol} (showing {ref_count} of {total_count})"
 
     if format == "json":
-        output_result(results, format, count_msg)
+        output_result(usages_result, format, count_msg)
     elif show_context:
-        references = results["references"]
-        definitions = results.get("definitions", [])
+        references = usages_result["references"]
+        definitions = usages_result.get("definitions", [])
 
         if not references and not definitions:
             click.echo(f"No usages found for {symbol}")
@@ -285,9 +284,9 @@ def usages(
                 click.echo(f"  {defn['file_path']}:{defn['line_start']}")
             click.echo()
 
-        if resolve and results.get("groups"):
+        if resolve and usages_result.get("groups"):
             click.echo()
-            for group in results["groups"]:
+            for group in usages_result["groups"]:
                 defn = group["definition"]
                 refs = group["references"]
                 click.echo(f"  {defn}: {len(refs)} references")
@@ -315,7 +314,7 @@ def usages(
                         click.echo(f"    {context}")
                 click.echo()
     else:
-        output_result(results, format, count_msg)
+        output_result(usages_result, format, count_msg)
 
 
 @cli.command()
@@ -331,7 +330,7 @@ def usages(
 @click.option(
     "--limit", type=int, default=100, help="Maximum results per direction", callback=validate_limit
 )
-def inheritance(symbol: str, root: str, format: str, direction: str, limit: int):
+def inheritance(symbol: str, root: str, format: str, direction: str, limit: int) -> None:
     """Search inheritance hierarchy."""
     config = load_config(Path(root))
 
@@ -347,7 +346,7 @@ def inheritance(symbol: str, root: str, format: str, direction: str, limit: int)
 @cli.command()
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
-def stats(root: str, format: str):
+def stats(root: str, format: str) -> None:
     """Show index statistics."""
     config = load_config(Path(root))
 
@@ -359,7 +358,7 @@ def stats(root: str, format: str):
 
 @cli.command()
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
-def init(root: str):
+def init(root: str) -> None:
     """Initialize project with default config."""
     config_path = Path(root) / ".ast-index.yaml"
 
@@ -379,7 +378,7 @@ def init(root: str):
 @click.option(
     "--limit", type=int, default=100, help="Maximum results per category", callback=validate_limit
 )
-def usings(file_path: str, root: str, format: str, limit: int):
+def usings(file_path: str, root: str, format: str, limit: int) -> None:
     """Показать using директивы для C# файла."""
     from pathlib import Path
 
@@ -387,11 +386,11 @@ def usings(file_path: str, root: str, format: str, limit: int):
     from .project_detection import detect_project_root
 
     if root:
-        project_root = Path(root).resolve()
+        project_root: Path | None = Path(root).resolve()
     else:
         project_root = detect_project_root(Path(file_path).resolve())
 
-    if not project_root:
+    if project_root is None:
         click.echo("Error: Cannot find project root", err=True)
         return
 
@@ -441,7 +440,7 @@ def usings(file_path: str, root: str, format: str, limit: int):
 @click.option(
     "--limit", type=int, default=None, help="Maximum definitions to show", callback=validate_limit
 )
-def definition(symbol: str, root: str, format: str, file: str | None, limit: int | None):
+def definition(symbol: str, root: str, format: str, file: str | None, limit: int | None) -> None:
     """Find symbol definition with import resolution."""
     config = load_config(Path(root))
 
@@ -459,7 +458,7 @@ def definition(symbol: str, root: str, format: str, file: str | None, limit: int
         if limit is not None:
             result = result[:limit]
         if format == "json":
-            output = [
+            output_list = [
                 {
                     "name": r["name"],
                     "kind": r["kind"],
@@ -470,7 +469,7 @@ def definition(symbol: str, root: str, format: str, file: str | None, limit: int
                 }
                 for r in result
             ]
-            click.echo(json.dumps(output, indent=2, default=str))
+            click.echo(json.dumps(output_list, indent=2, default=str))
         else:
             click.echo(f"Found {len(result)} definitions for {symbol}:")
             for r in result:
@@ -479,7 +478,7 @@ def definition(symbol: str, root: str, format: str, file: str | None, limit: int
                     click.echo(f"    Signature: {r['signature']}")
     else:
         if format == "json":
-            output = {
+            output_dict = {
                 "name": result["name"],
                 "kind": result["kind"],
                 "file_path": result["file_path"],
@@ -487,7 +486,7 @@ def definition(symbol: str, root: str, format: str, file: str | None, limit: int
                 "line_end": result["line_end"],
                 "signature": result.get("signature"),
             }
-            click.echo(json.dumps(output, indent=2, default=str))
+            click.echo(json.dumps(output_dict, indent=2, default=str))
         else:
             click.echo(f"Definition of {symbol}:")
             click.echo(f"  Kind: {result['kind']}")
@@ -502,7 +501,7 @@ def definition(symbol: str, root: str, format: str, file: str | None, limit: int
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
 @click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
-def methods(symbol: str | None, root: str, format: str, limit: int):
+def methods(symbol: str | None, root: str, format: str, limit: int) -> None:
     """List all methods, or methods of a specific class."""
     config = load_config(Path(root))
 
@@ -519,7 +518,7 @@ def methods(symbol: str | None, root: str, format: str, limit: int):
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
 @click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
-def functions(root: str, format: str, limit: int):
+def functions(root: str, format: str, limit: int) -> None:
     """List all functions."""
     config = load_config(Path(root))
 
@@ -533,7 +532,7 @@ def functions(root: str, format: str, limit: int):
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
 @click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
-def interfaces(root: str, format: str, limit: int):
+def interfaces(root: str, format: str, limit: int) -> None:
     """List all interfaces."""
     config = load_config(Path(root))
 
@@ -547,7 +546,7 @@ def interfaces(root: str, format: str, limit: int):
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
 @click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
-def types(root: str, format: str, limit: int):
+def types(root: str, format: str, limit: int) -> None:
     """List all type aliases."""
     config = load_config(Path(root))
 
@@ -561,7 +560,7 @@ def types(root: str, format: str, limit: int):
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
 @click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
-def top(root: str, format: str, limit: int):
+def top(root: str, format: str, limit: int) -> None:
     """Show most referenced symbols."""
     config = load_config(Path(root))
 
@@ -585,7 +584,7 @@ def top(root: str, format: str, limit: int):
 @cli.command()
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
-def kinds(root: str, format: str):
+def kinds(root: str, format: str) -> None:
     """List all symbol kinds present in the project."""
     config = load_config(Path(root))
 
@@ -606,7 +605,7 @@ def kinds(root: str, format: str):
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
 @click.option("--limit", type=int, default=200, help="Maximum results", callback=validate_limit)
-def file_symbols(file_path: str, root: str, format: str, limit: int):
+def file_symbols(file_path: str, root: str, format: str, limit: int) -> None:
     """Show all symbols in a specific file."""
     config = load_config(Path(root))
 
@@ -631,7 +630,7 @@ def file_symbols(file_path: str, root: str, format: str, limit: int):
                 click.echo(f"  {line:5d}  {kind:12s}  {name}")
 
 
-def main():
+def main() -> None:
     cli()
 
 
