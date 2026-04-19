@@ -1,8 +1,19 @@
 # AST Index
 
-**Version:** 0.6.0
+**Version:** 0.7.0
 
 A structural code search tool that indexes codebases using Abstract Syntax Tree (AST) analysis.
+
+## What's New in 0.7.0
+
+### Critical Bug Fixes
+
+1. **Fixed path duplication** - All 4 parsers now use resolved absolute paths, preventing duplicate symbols on every `index`/`rebuild`.
+2. **Fixed false-positive references** - 66 common method names (`close`, `get`, `set`, etc.) excluded from reference extraction.
+3. **Fixed `--file` filter on Windows** - Path separators normalized for cross-platform compatibility.
+4. **Fixed case-sensitive search on Windows** - Uses `PRAGMA case_sensitive_like` for correct ASCII case matching.
+5. **Fixed `methods` command** - Now accepts optional symbol argument: `ast-index methods Database`.
+6. **Fixed duplicate counts in `stats`** - Uses `COUNT(DISTINCT file_path)` for accurate file counts.
 
 ## What's New in 0.6.0
 
@@ -85,7 +96,7 @@ pip install -e .
 
 ```bash
 cd /path/to/AstIndex/dist
-pip install ast_index-0.6.0-py3-none-any.whl
+pip install ast_index-0.7.0-py3-none-any.whl
 ```
 
 ## Usage

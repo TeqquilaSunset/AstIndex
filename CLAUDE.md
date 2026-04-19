@@ -37,6 +37,7 @@ mypy ast_index
 - **Parsers** (`ast_index/parsers/`): Tree-sitter based parsers for Python, C#, JavaScript, and TypeScript
   - Uses automatic registration via `__init_subclass__` pattern
   - Each parser inherits from `BaseParser` and implements `parse()` and `can_parse()`
+  - All parsers use `str(file_path.resolve())` for absolute paths (prevents duplicates)
 
 - **Database** (`ast_index/database.py`): SQLite operations with FTS5 full-text search
   - Schema: files, symbols, symbols_fts, inheritance, refs, metadata, usings tables
@@ -47,6 +48,7 @@ mypy ast_index
   - `get_usages(symbol_name, limit=None, file_filter=None)` - SQL-level limit and file filtering
   - `get_usages_count(symbol_name, file_filter=None)` - total count for pagination display
   - `get_symbols_by_name(name, kind=None)` - optional kind filtering
+  - `get_stats()` uses `COUNT(DISTINCT file_path)` from symbols table for accurate file counts
 
 - **Parallel Indexer** (`ast_index/parallel_indexer.py`): Parse-parallel/write-sequential pattern
   - Files parsed concurrently via ThreadPoolExecutor (CPU-bound)
@@ -63,8 +65,10 @@ mypy ast_index
   1. Exact match (SELECT WHERE name = 'Symbol')
   2. Prefix search via FTS5 (MATCH 'Sym*')
   3. Fuzzy search via LIKE (LIKE '%Symbol%')
-  - Case-sensitive option via `COLLATE BINARY`
-  - `file_filter` parameter applied at SQL level via `AND file_path LIKE ?` across all search paths
+  - Case-sensitive option via `COLLATE BINARY` + `PRAGMA case_sensitive_like = ON`
+  - `file_filter` parameter normalizes path separators (`\` → `/`) for Windows compatibility
+  - `_build_file_clause()` uses `REPLACE(file_path, '\', '/') LIKE ?` for cross-platform matching
+  - `_apply_file_filter()` normalizes both filter and stored paths before comparison
   - Helper methods: `_build_file_clause()`, `_apply_file_filter()`, `_search_all()`, `_search_case_sensitive()`
   - `get_top_symbols` aggregates files via `GROUP_CONCAT` with deduplication
   - Over-query with `limit * 3`, deduplicate, then slice to `limit` to avoid duplicate shrinkage
@@ -86,6 +90,7 @@ mypy ast_index
   - `usings`: `--limit` for truncating results
   - `inheritance`: `--limit` for truncating results
   - `definition`: Shows all matches when multiple definitions exist, supports `--limit`
+  - `methods`: optional `SYMBOL` argument for filtering (e.g. `methods Database`), without it lists all methods
   - `file`: Show all symbols in a specific file
   - Empty query rejected with helpful message
   - `output_result()` text format: `- SymbolName (kind) [path/to/file:42]`
@@ -93,7 +98,7 @@ mypy ast_index
 - **References Extraction** (`ast_index/references.py`): Regex-based symbol usage tracking
   - Universal method works across all supported languages
   - Extracts CamelCase types and function calls
-  - Filters keywords, standard types, and locally-defined symbols
+  - Filters keywords, standard types, common method names (`COMMON_METHOD_NAMES`), and locally-defined symbols
   - Removes comments and string literals before analysis
   - **Known limitations**: False positives in strings/comments, no import resolution, no scope awareness
 

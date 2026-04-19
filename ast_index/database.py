@@ -358,11 +358,19 @@ class Database:
         return row["value"] if row else None
 
     def get_stats(self) -> dict[str, int]:
+        files = self._conn.execute(
+            "SELECT COUNT(DISTINCT file_path) as cnt FROM symbols"
+        ).fetchone()["cnt"]
+        symbols = self._conn.execute("SELECT COUNT(*) as cnt FROM symbols").fetchone()["cnt"]
+        inheritances = self._conn.execute("SELECT COUNT(*) as cnt FROM inheritance").fetchone()[
+            "cnt"
+        ]
+        references = self._conn.execute("SELECT COUNT(*) as cnt FROM refs").fetchone()["cnt"]
         return {
-            "files": self._conn.execute("SELECT COUNT(*) FROM files").fetchone()[0],
-            "symbols": self._conn.execute("SELECT COUNT(*) FROM symbols").fetchone()[0],
-            "inheritances": self._conn.execute("SELECT COUNT(*) FROM inheritance").fetchone()[0],
-            "references": self._conn.execute("SELECT COUNT(*) FROM refs").fetchone()[0],
+            "files": files,
+            "symbols": symbols,
+            "inheritances": inheritances,
+            "references": references,
         }
 
     def _clear_all(self):

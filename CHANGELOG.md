@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-04-19
+
+### Fixed
+
+- **Path duplication in all parsers** - All 4 parsers (Python, C#, JavaScript, TypeScript) stored symbols with relative paths while cleanup used absolute paths, causing duplicate entries on every `index`/`rebuild`. Now all parsers use `str(file_path.resolve())`.
+- **False-positive references for common methods** - `close`, `get`, `set`, `add`, `remove`, `open`, and 60+ other common method names were extracted as symbol references, creating massive noise. Added `COMMON_METHOD_NAMES` exclusion set merged into all language filters.
+- **`--file` filter broken on Windows** - `LIKE '%path/%'` didn't match paths with `\` separators. Both `_build_file_clause` (SQL) and `_apply_file_filter` (Python) now normalize separators to `/` before comparison.
+- **Case-sensitive search broken on Windows** - SQLite's `LIKE` is ASCII case-insensitive on Windows by default, even with `COLLATE BINARY`. Now enables `PRAGMA case_sensitive_like = ON` during case-sensitive queries.
+- **`methods` command listing all methods** - `ast-index methods` had no symbol argument, making it identical to `--kind method`. Now accepts optional `SYMBOL` argument: `ast-index methods Database`.
+- **Duplicate file counts in `stats`** - `get_stats()` counted rows in `files` table instead of distinct file paths in `symbols`. Now uses `COUNT(DISTINCT file_path)` for resilience.
+
+### Added
+
+- Test for reference context from stripped content (verifies docstrings don't leak into references).
+
 ## [0.6.0] - 2026-04-19
 
 ### Fixed

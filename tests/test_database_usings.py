@@ -8,7 +8,7 @@ from ast_index.models import NamespaceMapping
 @pytest.fixture
 def temp_db():
     """Создать временную базу данных."""
-    fd, path = tempfile.mkstemp(suffix='.db')
+    fd, path = tempfile.mkstemp(suffix=".db")
     os.close(fd)
 
     db = Database(path)
@@ -16,6 +16,7 @@ def temp_db():
 
     yield db
 
+    db.close()
     os.unlink(path)
 
 
@@ -25,7 +26,7 @@ def test_save_and_get_usings(temp_db):
         file_path="test.cs",
         aliases={"App": "MyNamespace.App"},
         imports={"System", "System.Collections.Generic"},
-        static_imports={"System.Math"}
+        static_imports={"System.Math"},
     )
 
     temp_db.save_usings("test.cs", mapping)
@@ -40,10 +41,7 @@ def test_save_and_get_usings(temp_db):
 
 def test_delete_usings(temp_db):
     """Тест удаления usings."""
-    mapping = NamespaceMapping(
-        file_path="test.cs",
-        imports={"System"}
-    )
+    mapping = NamespaceMapping(file_path="test.cs", imports={"System"})
 
     temp_db.save_usings("test.cs", mapping)
     temp_db.delete_usings_for_file("test.cs")
@@ -55,17 +53,11 @@ def test_delete_usings(temp_db):
 def test_update_usings(temp_db):
     """Тест обновления usings (старые удаляются)."""
     # Первое сохранение
-    mapping1 = NamespaceMapping(
-        file_path="test.cs",
-        imports={"System", "Collections"}
-    )
+    mapping1 = NamespaceMapping(file_path="test.cs", imports={"System", "Collections"})
     temp_db.save_usings("test.cs", mapping1)
 
     # Второе сохранение (должно заменить первое)
-    mapping2 = NamespaceMapping(
-        file_path="test.cs",
-        imports={"System.IO"}
-    )
+    mapping2 = NamespaceMapping(file_path="test.cs", imports={"System.IO"})
     temp_db.save_usings("test.cs", mapping2)
 
     retrieved = temp_db.get_usings_for_file("test.cs")
