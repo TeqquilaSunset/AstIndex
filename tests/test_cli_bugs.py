@@ -1,4 +1,8 @@
+import yaml
+
+from ast_index.config import Config, load_config
 from ast_index.database import Database
+from ast_index.indexer import Indexer
 from ast_index.models import Reference, Symbol
 from ast_index.search import SearchEngine
 
@@ -536,3 +540,601 @@ class TestNamespaceResolve:
             ],
         )
         assert result.exit_code == 0
+
+
+class TestDotPathSearch:
+    def test_search_with_dot_path(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="SourceMeta",
+                kind="class",
+                file_path="/project/Api/Source.cs",
+                line_start=1,
+                line_end=10,
+                scope="Api.Source",
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="SourceMeta",
+                kind="class",
+                file_path="/project/Other/Meta.cs",
+                line_start=1,
+                line_end=10,
+                scope="Other.Meta",
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        results = engine.search("Api.Source.SourceMeta", limit=50, level="exact")
+        assert len(results) == 1
+        assert results[0]["scope"] == "Api.Source"
+        engine.close()
+
+    def test_search_dot_path_fuzzy(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="SourceMeta",
+                kind="class",
+                file_path="/project/Api/Source.cs",
+                line_start=1,
+                line_end=10,
+                scope="Api.Source",
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        results = engine.search("Api.Source.SourceMeta", limit=50, level="prefix")
+        assert len(results) >= 1
+        assert results[0]["name"] == "SourceMeta"
+        engine.close()
+
+    def test_search_dot_path_no_match_falls_back(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="MyClass",
+                kind="class",
+                file_path="/project/some/Other.cs",
+                line_start=1,
+                line_end=10,
+                scope="Wrong.Namespace",
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        results = engine.search("Some.Namespace.MyClass", limit=50, level="exact")
+        assert len(results) == 1
+        assert results[0]["name"] == "MyClass"
+        engine.close()
+
+
+class TestBugConfigRootOverride:
+    def test_load_config_preserves_user_root(self, temp_dir):
+        parent_dir = temp_dir / "parent"
+        parent_dir.mkdir()
+        project_dir = parent_dir / "project"
+        project_dir.mkdir()
+
+        config_file = parent_dir / ".ast-index.yaml"
+        config_file.write_text(yaml.dump({"includes": ["*.cs"], "excludes": ["bin", "obj"]}))
+
+        config = load_config(project_dir)
+        assert config.root == project_dir.resolve()
+
+    def test_load_config_without_yaml_uses_root(self, temp_dir):
+        config = load_config(temp_dir)
+        assert config.root == temp_dir.resolve()
+
+    def test_load_config_with_yaml_in_project_root(self, temp_dir):
+        config_file = temp_dir / ".ast-index.yaml"
+        config_file.write_text(yaml.dump({"includes": ["*.cs"], "excludes": ["bin"]}))
+        config = load_config(temp_dir)
+        assert config.root == temp_dir.resolve()
+
+    def test_load_config_db_path_uses_user_root(self, temp_dir):
+        project_dir = temp_dir / "project"
+        project_dir.mkdir()
+
+        parent_config = temp_dir / ".ast-index.yaml"
+        parent_config.write_text(yaml.dump({"includes": ["*.cs"], "excludes": ["bin"]}))
+
+        config = load_config(project_dir)
+        assert str(project_dir.resolve()) in config.db_path
+
+
+class TestBugUpdateDeletesAll:
+    def test_update_preserves_unmodified_files(self, temp_dir):
+        cs_file = temp_dir / "Engine.cs"
+        cs_file.write_text("public class Engine { }\n")
+
+        config = Config(root=temp_dir)
+        with Indexer(config=config, use_parallel=False) as indexer:
+            indexer.index()
+
+        with Database(config.db_path) as db:
+            stats = db.get_stats()
+            assert stats["files"] == 1
+            assert stats["symbols"] >= 1
+
+        cs_file.write_text("public class Engine { public int Id { get; set; } }\n")
+
+        config2 = Config(root=temp_dir)
+        with Indexer(config=config2, use_parallel=False) as indexer:
+            update_stats = indexer.update()
+
+        assert update_stats["files_deleted"] == 0
+        assert update_stats["files_modified"] == 1
+
+    def test_update_does_not_delete_when_config_in_parent(self, temp_dir):
+        parent_dir = temp_dir / "workspace"
+        parent_dir.mkdir()
+        project_dir = parent_dir / "myproject"
+        project_dir.mkdir()
+
+        config_file = parent_dir / ".ast-index.yaml"
+        config_file.write_text(yaml.dump({"excludes": ["bin", "obj"]}))
+
+        cs_file = project_dir / "App.cs"
+        cs_file.write_text("public class App { }\n")
+
+        config = Config(root=project_dir)
+        with Indexer(config=config, use_parallel=False) as indexer:
+            indexer.index()
+
+        with Database(config.db_path) as db:
+            assert db.get_stats()["files"] == 1
+
+        config2 = Config(root=project_dir)
+        with Indexer(config=config2, use_parallel=False) as indexer:
+            update_stats = indexer.update()
+
+        assert update_stats["files_deleted"] == 0
+
+
+class TestBugFileCommand:
+    def test_search_in_file_finds_symbols(self, temp_dir):
+        cs_file = temp_dir / "Engine.cs"
+        cs_file.write_text("public class Engine { public void Run() { } }\n")
+
+        config = Config(root=temp_dir)
+        with Indexer(config=config, use_parallel=False) as indexer:
+            indexer.index()
+
+        with SearchEngine(config=config) as engine:
+            resolved = str(cs_file.resolve())
+            results = engine.search_in_file(resolved)
+
+        assert len(results) >= 1
+        names = [r["name"] for r in results]
+        assert "Engine" in names
+
+    def test_search_in_file_fuzzy_fallback(self, temp_dir):
+        db = Database(str(temp_dir / "test.db"))
+        abs_path = str(temp_dir.resolve() / "Engine.cs")
+        db.insert_symbol(
+            Symbol(
+                name="Engine",
+                kind="class",
+                file_path=abs_path,
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=str(temp_dir / "test.db"))
+        results = engine.search_in_file("Engine.cs")
+        assert len(results) == 1
+        engine.close()
+
+
+class TestSearchFileFilterSQL:
+    def test_search_file_filter_at_sql_level(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="Controller",
+                kind="class",
+                file_path="/project/ioServer/Controllers/HomeController.cs",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="Controller",
+                kind="class",
+                file_path="/project/other/Controller.cs",
+                line_start=1,
+                line_end=5,
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        results = engine.search(
+            "Controller", limit=50, level="exact", file_filter="ioServer/Controllers/"
+        )
+        assert len(results) == 1
+        assert "ioServer" in results[0]["file_path"]
+        engine.close()
+
+    def test_search_file_filter_nonexistent_returns_empty(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="Controller",
+                kind="class",
+                file_path="/project/Controllers/HomeController.cs",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        results = engine.search(
+            "Controller", limit=50, level="exact", file_filter="nonexistent_path"
+        )
+        assert len(results) == 0
+        engine.close()
+
+    def test_search_file_filter_prefix_level(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="HomeController",
+                kind="class",
+                file_path="/project/ioServer/Controllers/HomeController.cs",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="AdminController",
+                kind="class",
+                file_path="/project/other/AdminController.cs",
+                line_start=1,
+                line_end=5,
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        results = engine.search("Controller", limit=50, level="prefix", file_filter="ioServer/")
+        assert len(results) == 1
+        assert results[0]["name"] == "HomeController"
+        engine.close()
+
+    def test_search_file_filter_fuzzy_level(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="MyService",
+                kind="class",
+                file_path="/project/services/MyService.cs",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="MyService",
+                kind="class",
+                file_path="/project/handlers/MyService.cs",
+                line_start=1,
+                line_end=5,
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        results = engine.search("Serv", limit=50, level="fuzzy", file_filter="services/")
+        assert len(results) == 1
+        engine.close()
+
+    def test_search_file_filter_none_returns_all(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="Handler",
+                kind="class",
+                file_path="/project/a/Handler.cs",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="Handler",
+                kind="class",
+                file_path="/project/b/Handler.cs",
+                line_start=1,
+                line_end=5,
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        results = engine.search("Handler", limit=50, level="exact", file_filter=None)
+        assert len(results) == 2
+        engine.close()
+
+    def test_search_all_with_file_filter(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="Foo",
+                kind="class",
+                file_path="/project/dir_a/Foo.cs",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="Bar",
+                kind="class",
+                file_path="/project/dir_b/Bar.cs",
+                line_start=1,
+                line_end=5,
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        results = engine.search(None, limit=50, file_filter="dir_a/")
+        assert len(results) == 1
+        assert results[0]["name"] == "Foo"
+        engine.close()
+
+    def test_cli_search_file_filter(self, temp_dir):
+        from click.testing import CliRunner
+        from ast_index.cli import cli
+        from ast_index.config import Config
+
+        config = Config(root=temp_dir)
+        db = Database(config.db_path)
+        db.insert_symbol(
+            Symbol(
+                name="Controller",
+                kind="class",
+                file_path="/project/ioServer/Controllers/HomeController.cs",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="Controller",
+                kind="class",
+                file_path="/project/other/Controller.cs",
+                line_start=1,
+                line_end=5,
+            )
+        )
+        db.close()
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["search", "Controller", "--root", str(temp_dir), "--file", "ioServer/"],
+        )
+        assert result.exit_code == 0
+        assert "ioServer" in result.output
+        assert "other" not in result.output
+
+    def test_search_file_filter_with_kind(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="Test",
+                kind="class",
+                file_path="/project/dir_a/Test.cs",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="Test",
+                kind="method",
+                file_path="/project/dir_b/Test.cs",
+                line_start=1,
+                line_end=5,
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        results = engine.search("Test", limit=50, level="exact", kind="class", file_filter="dir_a/")
+        assert len(results) == 1
+        assert results[0]["kind"] == "class"
+        engine.close()
+
+    def test_search_case_sensitive_with_file_filter(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="MyClass",
+                kind="class",
+                file_path="/project/dir_a/MyClass.cs",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="myclass",
+                kind="function",
+                file_path="/project/dir_b/helper.py",
+                line_start=1,
+                line_end=5,
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        results = engine.search(
+            "MyClass", limit=50, level="exact", case_sensitive=True, file_filter="dir_a/"
+        )
+        assert len(results) == 1
+        assert results[0]["name"] == "MyClass"
+        engine.close()
+
+
+class TestDefinitionLimit:
+    def test_definition_with_limit(self, temp_dir):
+        from click.testing import CliRunner
+        from ast_index.cli import cli
+        from ast_index.config import Config
+
+        config = Config(root=temp_dir)
+        db = Database(config.db_path)
+        for i in range(20):
+            db.insert_symbol(
+                Symbol(
+                    name="Id",
+                    kind="property",
+                    file_path=f"/test/file_{i}.cs",
+                    line_start=i + 1,
+                    line_end=i + 2,
+                )
+            )
+        db.close()
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["definition", "Id", "--root", str(temp_dir), "--limit", "5"],
+        )
+        assert result.exit_code == 0
+        assert "Found 5 definitions" in result.output
+
+    def test_definition_without_limit_shows_all(self, temp_dir):
+        from click.testing import CliRunner
+        from ast_index.cli import cli
+        from ast_index.config import Config
+
+        config = Config(root=temp_dir)
+        db = Database(config.db_path)
+        for i in range(10):
+            db.insert_symbol(
+                Symbol(
+                    name="MySymbol",
+                    kind="class",
+                    file_path=f"/test/file_{i}.cs",
+                    line_start=i + 1,
+                    line_end=i + 2,
+                )
+            )
+        db.close()
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["definition", "MySymbol", "--root", str(temp_dir)],
+        )
+        assert result.exit_code == 0
+        assert "Found 10 definitions" in result.output
+
+    def test_definition_limit_json(self, temp_dir):
+        from click.testing import CliRunner
+        from ast_index.cli import cli
+        from ast_index.config import Config
+
+        config = Config(root=temp_dir)
+        db = Database(config.db_path)
+        for i in range(10):
+            db.insert_symbol(
+                Symbol(
+                    name="Tag",
+                    kind="class",
+                    file_path=f"/test/file_{i}.cs",
+                    line_start=i + 1,
+                    line_end=i + 2,
+                )
+            )
+        db.close()
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["definition", "Tag", "--root", str(temp_dir), "--limit", "3", "--format", "json"],
+        )
+        assert result.exit_code == 0
+        import json
+
+        data = json.loads(result.output)
+        assert len(data) == 3
+
+
+class TestUsagesNoSymbolCapped:
+    def test_usages_no_symbol_caps_at_50(self, temp_dir):
+        from click.testing import CliRunner
+        from ast_index.cli import cli
+        from ast_index.config import Config
+
+        config = Config(root=temp_dir)
+        db = Database(config.db_path)
+        for i in range(100):
+            db.insert_symbol(
+                Symbol(
+                    name=f"Sym_{i}",
+                    kind="class",
+                    file_path=f"/test/file_{i}.cs",
+                    line_start=1,
+                    line_end=5,
+                )
+            )
+            db.insert_references(
+                [
+                    Reference(
+                        f"Sym_{i}", f"/test/file_{i}.cs", f"/test/usage_{i}.cs", 10, 0, "usage"
+                    ),
+                ]
+            )
+        db.close()
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["usages", "--root", str(temp_dir)])
+        assert result.exit_code == 0
+        assert "Top 50 most referenced" in result.output
+
+    def test_usages_no_symbol_respects_lower_limit(self, temp_dir):
+        from click.testing import CliRunner
+        from ast_index.cli import cli
+        from ast_index.config import Config
+
+        config = Config(root=temp_dir)
+        db = Database(config.db_path)
+        for i in range(100):
+            db.insert_symbol(
+                Symbol(
+                    name=f"Sym_{i}",
+                    kind="class",
+                    file_path=f"/test/file_{i}.cs",
+                    line_start=1,
+                    line_end=5,
+                )
+            )
+            db.insert_references(
+                [
+                    Reference(
+                        f"Sym_{i}", f"/test/file_{i}.cs", f"/test/usage_{i}.cs", 10, 0, "usage"
+                    ),
+                ]
+            )
+        db.close()
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["usages", "--root", str(temp_dir), "--limit", "10"])
+        assert result.exit_code == 0
+        assert "Top 10 most referenced" in result.output

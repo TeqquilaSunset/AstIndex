@@ -44,6 +44,9 @@ mypy ast_index
   - Uses djb2 hash for project path
   - WAL mode with `busy_timeout=5000` for concurrency
   - `executemany` for batch inserts
+  - `get_usages(symbol_name, limit=None, file_filter=None)` - SQL-level limit and file filtering
+  - `get_usages_count(symbol_name, file_filter=None)` - total count for pagination display
+  - `get_symbols_by_name(name, kind=None)` - optional kind filtering
 
 - **Parallel Indexer** (`ast_index/parallel_indexer.py`): Parse-parallel/write-sequential pattern
   - Files parsed concurrently via ThreadPoolExecutor (CPU-bound)
@@ -61,18 +64,31 @@ mypy ast_index
   2. Prefix search via FTS5 (MATCH 'Sym*')
   3. Fuzzy search via LIKE (LIKE '%Symbol%')
   - Case-sensitive option via `COLLATE BINARY`
+  - `file_filter` parameter applied at SQL level via `AND file_path LIKE ?` across all search paths
+  - Helper methods: `_build_file_clause()`, `_apply_file_filter()`, `_search_all()`, `_search_case_sensitive()`
   - `get_top_symbols` aggregates files via `GROUP_CONCAT` with deduplication
+  - Over-query with `limit * 3`, deduplicate, then slice to `limit` to avoid duplicate shrinkage
+  - `search_class()` also deduplicates results
+  - Wildcard search: strips trailing `*` from query for FTS prefix matching
+  - Dot-path search: `Api.Source.SourceMeta` splits into name + namespace hint, filters by scope/file_path
+  - `--kind` filter threads through all search levels (exact, prefix, fuzzy)
+  - `search_usages(resolve=True)` groups references by resolved definition via SymbolResolver
 
 - **CLI** (`ast_index/cli.py`): Click-based command interface
   - Commands: index, update, rebuild, search, class, usages, usings, inheritance, stats, definition, file, top, methods, functions, interfaces, types, kinds
   - All commands support `--format json` for AI integration
-  - `search`: `--case-sensitive`, `--file`, `--level`, `--limit`
-  - `usages`: `--show-context` (symbol highlighting with `>>>match<<<`), `--file`, `--limit` (default 500)
+  - `search`: `--case-sensitive`, `--file` (SQL-level), `--level`, `--limit`, `--kind`
+  - `usages`: `--show-context` (symbol highlighting with `>>>match<<<`), `--file`, `--limit` (default 500, SQL-level), `--kind`, `--resolve`
+  - `--limit` and `--file` in usages applied at SQL level (no Python-side truncation)
+  - `usages` without symbol: capped at `min(limit, 50)` to avoid massive output
+  - Shows `"Usages of X (showing N of M)"` when total exceeds limit
+  - `--resolve` groups references by resolved definition (namespace-aware)
   - `usings`: `--limit` for truncating results
   - `inheritance`: `--limit` for truncating results
-  - `definition`: Shows all matches when multiple definitions exist
+  - `definition`: Shows all matches when multiple definitions exist, supports `--limit`
   - `file`: Show all symbols in a specific file
   - Empty query rejected with helpful message
+  - `output_result()` text format: `- SymbolName (kind) [path/to/file:42]`
 
 - **References Extraction** (`ast_index/references.py`): Regex-based symbol usage tracking
   - Universal method works across all supported languages

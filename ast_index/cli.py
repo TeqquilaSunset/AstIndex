@@ -175,11 +175,13 @@ def search(
 
     with SearchEngine(config=config) as engine:
         results = engine.search(
-            query, limit=limit, level=level, case_sensitive=case_sensitive, kind=kind
+            query,
+            limit=limit,
+            level=level,
+            case_sensitive=case_sensitive,
+            kind=kind,
+            file_filter=file_filter,
         )
-
-    if file_filter:
-        results = [r for r in results if file_filter in r.get("file_path", "")]
 
     if query is None:
         output_result(results, format, f"Found {len(results)} symbols (all)")
@@ -231,8 +233,8 @@ def usages(
 
     with SearchEngine(config=config) as engine:
         if symbol is None:
-            # Show top referenced symbols
-            results = engine.get_top_symbols(limit=limit)
+            top_limit = min(limit, 50)
+            results = engine.get_top_symbols(limit=top_limit)
 
             if format == "json":
                 output_result(results, format, f"Top {len(results)} most referenced symbols")
@@ -436,7 +438,10 @@ def usings(file_path: str, root: str, format: str, limit: int):
     type=str,
     help="File where symbol is used (helps resolve which definition when multiple exist)",
 )
-def definition(symbol: str, root: str, format: str, file: str | None):
+@click.option(
+    "--limit", type=int, default=None, help="Maximum definitions to show", callback=validate_limit
+)
+def definition(symbol: str, root: str, format: str, file: str | None, limit: int | None):
     """Find symbol definition with import resolution."""
     config = load_config(Path(root))
 
@@ -451,6 +456,8 @@ def definition(symbol: str, root: str, format: str, file: str | None):
         return
 
     if isinstance(result, list):
+        if limit is not None:
+            result = result[:limit]
         if format == "json":
             output = [
                 {

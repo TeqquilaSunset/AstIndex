@@ -1,10 +1,25 @@
 # AST Index
 
-**Version:** 0.4.1
+**Version:** 0.6.0
 
 A structural code search tool that indexes codebases using Abstract Syntax Tree (AST) analysis.
 
-## What's New in 0.4.1
+## What's New in 0.6.0
+
+### Bug Fixes
+
+1. **Fixed `search --file` filter** - Was filtering in Python after SQL LIMIT, returning 0 results for valid file paths. Now filters at SQL level.
+2. **Fixed `usages --file` showing unfiltered definitions** - Definitions are now correctly scoped to filtered context.
+
+### New Features
+
+3. **`definition --limit`** - Limit output when symbol has many definitions (e.g., `ast-index definition "Id" --limit 10`)
+
+### Improvements
+
+4. **`usages` without arguments capped at 50** - No more 131KB output; use `--limit` to override.
+
+## What's New in 0.5.1
 
 ### Bug Fixes
 
@@ -70,7 +85,7 @@ pip install -e .
 
 ```bash
 cd /path/to/AstIndex/dist
-pip install ast_index-0.4.0-py3-none-any.whl
+pip install ast_index-0.6.0-py3-none-any.whl
 ```
 
 ## Usage
@@ -105,6 +120,9 @@ ast-index file src/UserService.cs
 
 # Find symbol definition (shows all matches if multiple)
 ast-index definition "SymbolName"
+
+# Limit definitions when many exist
+ast-index definition "Id" --limit 10
 
 # Analyze inheritance
 ast-index inheritance "BaseClass" --direction children

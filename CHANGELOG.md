@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-04-19
+
+### Fixed
+
+- **`search --file` filter not working** - Root cause: file filter was applied in Python after SQL `LIMIT`, so results were fetched without filtering then truncated. Now filter is applied at SQL level via `AND file_path LIKE ?` in all search paths (exact, prefix, fuzzy, case-sensitive, dot-path).
+- **`usages --file` showing all definitions** - Definitions were fetched without file filter, making it appear the filter wasn't working. Definitions in the result dict are now informational only (references are properly filtered).
+
+### Added
+
+- **`definition --limit` option** - Limit number of definitions shown when multiple exist. Previously, symbols like `Id` with 296 definitions would dump all results. Usage: `ast-index definition "Id" --limit 10`.
+
+### Changed
+
+- **`usages` without symbol capped at 50** - Previously used the default `--limit 500`, generating massive output. Now capped at `min(limit, 50)` for the "top referenced symbols" view. Users can still override with `--limit`.
+- **`SearchEngine.search()` accepts `file_filter` parameter** - File filtering moved from CLI layer into the search engine, ensuring consistent behavior across all code paths.
+
+## [0.5.1] - 2026-04-18
+
+### Fixed
+
+- **Config root override bug** - `load_config()` now always uses the user-specified root directory instead of overwriting it with `config_file.parent`. Previously, if `.ast-index.yaml` existed in a parent directory, `config.root` was set to that parent, causing all subsequent operations to use wrong paths.
+- **`update` command deleting all files** - Root cause: when config root was wrong, `scan_files()` returned 0 files, making `update()` treat all indexed files as deleted. Now correctly preserves unmodified files.
+- **`file` command returning 0 results** - Root cause: wrong `config.root` led to wrong `db_path`, querying an empty database. Additionally, `search_in_file()` now falls back to LIKE substring matching when exact path match fails.
+- **`index`/`rebuild` returning 0 files with config** - Same root cause as above; `scan_files()` was walking the wrong directory.
+
 ## [0.4.1] - 2026-04-18
 
 ### Fixed

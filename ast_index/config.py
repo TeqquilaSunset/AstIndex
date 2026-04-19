@@ -74,22 +74,22 @@ def load_config(root: Path | None = None) -> Config:
     elif isinstance(root, str):
         root = Path(root)
 
-    config_file = find_config_file(root)
+    resolved_root = root.resolve()
+    config_file = find_config_file(resolved_root)
 
     if config_file:
         with open(config_file) as f:
             data = yaml.safe_load(f) or {}
 
-        config_root = config_file.parent
         return Config(
-            root=config_root,
+            root=resolved_root,
             includes=data.get("includes", DEFAULT_INCLUDES.copy()),
             excludes=data.get("excludes", DEFAULT_EXCLUDES.copy()),
             database_path=data.get("database_path"),
             languages=data.get("languages", ["python", "csharp", "javascript", "typescript"]),
         )
 
-    return Config(root=root)
+    return Config(root=resolved_root)
 
 
 def save_config(config: Config, path: Path | None = None) -> None:
