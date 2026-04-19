@@ -498,15 +498,19 @@ def definition(symbol: str, root: str, format: str, file: str | None, limit: int
 
 
 @cli.command()
+@click.argument("symbol", required=False, default=None)
 @click.option("--root", type=click.Path(exists=True), default=".", help="Project root directory")
 @click.option("--format", type=click.Choice(["text", "json"]), default="text", help="Output format")
 @click.option("--limit", type=int, default=50, help="Maximum results", callback=validate_limit)
-def methods(root: str, format: str, limit: int):
-    """List all methods."""
+def methods(symbol: str | None, root: str, format: str, limit: int):
+    """List all methods, or methods of a specific class."""
     config = load_config(Path(root))
 
     with SearchEngine(config=config) as engine:
-        results = engine.search_by_kind("method", limit=limit)
+        if symbol:
+            results = engine.search(symbol, limit=limit, kind="method")
+        else:
+            results = engine.search_by_kind("method", limit=limit)
 
     output_result(results, format, f"Found {len(results)} methods")
 
