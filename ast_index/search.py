@@ -73,11 +73,13 @@ class SearchEngine:
     ) -> list[dict[str, Any]]:
         if not file_filter:
             return symbols
-        return [s for s in symbols if file_filter in s.get("file_path", "")]
+        normalized = file_filter.replace("\\", "/")
+        return [s for s in symbols if normalized in s.get("file_path", "").replace("\\", "/")]
 
     def _build_file_clause(self, file_filter: str | None) -> tuple[str, list[Any]]:
         if file_filter:
-            return " AND file_path LIKE ?", [f"%{file_filter}%"]
+            normalized = file_filter.replace("\\", "/")
+            return " AND REPLACE(file_path, '\\', '/') LIKE ?", [f"%{normalized}%"]
         return "", []
 
     def _search_all(

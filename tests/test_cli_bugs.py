@@ -1138,3 +1138,42 @@ class TestUsagesNoSymbolCapped:
         result = runner.invoke(cli, ["usages", "--root", str(temp_dir), "--limit", "10"])
         assert result.exit_code == 0
         assert "Top 10 most referenced" in result.output
+
+
+class TestFileFilterPathSeparator:
+    def test_file_filter_with_forward_slash_matches_backslash(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="SampleClass",
+                kind="class",
+                file_path="C:\\project\\src\\app.py",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        results = engine.search("SampleClass", limit=50, level="exact", file_filter="src/")
+        assert len(results) == 1
+        engine.close()
+
+    def test_file_filter_apply_normalizes_separators(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="OtherClass",
+                kind="class",
+                file_path="C:\\project\\subdir\\other.py",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        results = engine.search("OtherClass", limit=50, level="exact")
+        filtered = engine._apply_file_filter(results, "subdir/")
+        assert len(filtered) == 1
+        engine.close()
