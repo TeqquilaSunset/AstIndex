@@ -1177,3 +1177,34 @@ class TestFileFilterPathSeparator:
         filtered = engine._apply_file_filter(results, "subdir/")
         assert len(filtered) == 1
         engine.close()
+
+
+class TestCaseSensitiveSearch:
+    def test_case_sensitive_excludes_different_case(self, db_path):
+        db = Database(db_path)
+        db.insert_symbol(
+            Symbol(
+                name="Database",
+                kind="class",
+                file_path="/test/db.py",
+                line_start=1,
+                line_end=10,
+            )
+        )
+        db.insert_symbol(
+            Symbol(
+                name="database",
+                kind="function",
+                file_path="/test/helper.py",
+                line_start=1,
+                line_end=5,
+            )
+        )
+        db.close()
+
+        engine = SearchEngine(db_path=db_path)
+        results = engine.search("Database", case_sensitive=True, level="exact")
+        names = [r["name"] for r in results]
+        assert "Database" in names
+        assert "database" not in names
+        engine.close()

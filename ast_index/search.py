@@ -106,32 +106,36 @@ class SearchEngine:
         kind: str | None = None,
         file_filter: str | None = None,
     ) -> list[dict[str, Any]]:
-        file_clause, file_params = self._build_file_clause(file_filter)
-        if level == "exact":
-            if kind:
-                cursor = self.db._conn.execute(
-                    "SELECT * FROM symbols WHERE name = ? COLLATE BINARY "
-                    f"AND kind = ?{file_clause} LIMIT ?",
-                    [query, kind] + file_params + [limit * 3],
-                )
+        self.db._conn.execute("PRAGMA case_sensitive_like = ON")
+        try:
+            file_clause, file_params = self._build_file_clause(file_filter)
+            if level == "exact":
+                if kind:
+                    cursor = self.db._conn.execute(
+                        "SELECT * FROM symbols WHERE name = ? COLLATE BINARY "
+                        f"AND kind = ?{file_clause} LIMIT ?",
+                        [query, kind] + file_params + [limit * 3],
+                    )
+                else:
+                    cursor = self.db._conn.execute(
+                        f"SELECT * FROM symbols WHERE name = ? COLLATE BINARY{file_clause} LIMIT ?",
+                        [query] + file_params + [limit * 3],
+                    )
             else:
-                cursor = self.db._conn.execute(
-                    f"SELECT * FROM symbols WHERE name = ? COLLATE BINARY{file_clause} LIMIT ?",
-                    [query] + file_params + [limit * 3],
-                )
-        else:
-            if kind:
-                cursor = self.db._conn.execute(
-                    f"SELECT * FROM symbols "
-                    f"WHERE name LIKE ? COLLATE BINARY AND kind = ?{file_clause} LIMIT ?",
-                    [f"%{query}%", kind] + file_params + [limit * 3],
-                )
-            else:
-                cursor = self.db._conn.execute(
-                    f"SELECT * FROM symbols WHERE name LIKE ? COLLATE BINARY{file_clause} LIMIT ?",
-                    [f"%{query}%"] + file_params + [limit * 3],
-                )
-        return self._deduplicate([dict(row) for row in cursor.fetchall()])[:limit]
+                if kind:
+                    cursor = self.db._conn.execute(
+                        f"SELECT * FROM symbols "
+                        f"WHERE name LIKE ? COLLATE BINARY AND kind = ?{file_clause} LIMIT ?",
+                        [f"%{query}%", kind] + file_params + [limit * 3],
+                    )
+                else:
+                    cursor = self.db._conn.execute(
+                        f"SELECT * FROM symbols WHERE name LIKE ? COLLATE BINARY{file_clause} LIMIT ?",
+                        [f"%{query}%"] + file_params + [limit * 3],
+                    )
+            return self._deduplicate([dict(row) for row in cursor.fetchall()])[:limit]
+        finally:
+            self.db._conn.execute("PRAGMA case_sensitive_like = OFF")
 
     def _deduplicate(self, symbols: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen = set()
