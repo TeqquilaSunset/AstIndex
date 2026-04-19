@@ -169,8 +169,9 @@ class TestExtractReferencesUniversal:
             }
         }
         """
-        refs = extract_references_universal(content, "test.cs", "csharp",
-                                            {"UserService", "GetUser"})
+        refs = extract_references_universal(
+            content, "test.cs", "csharp", {"UserService", "GetUser"}
+        )
         assert len(refs) == 2
         assert any(r.symbol_name == "UserRepository" for r in refs)
         assert any(r.symbol_name == "GetData" for r in refs)
@@ -183,8 +184,9 @@ class UserService:
         repo = UserRepository()
         repo.get_data()
 """
-        refs = extract_references_universal(content, "test.py", "python",
-                                            {"UserService", "get_user"})
+        refs = extract_references_universal(
+            content, "test.py", "python", {"UserService", "get_user"}
+        )
         # Should find both UserRepository (CamelCase) and get_data (function call)
         assert len(refs) == 2
         assert any(r.symbol_name == "UserRepository" for r in refs)
@@ -200,8 +202,9 @@ class UserService:
             }
         }
         """
-        refs = extract_references_universal(content, "test.js", "javascript",
-                                            {"UserService", "getUser"})
+        refs = extract_references_universal(
+            content, "test.js", "javascript", {"UserService", "getUser"}
+        )
         assert len(refs) == 2
         assert any(r.symbol_name == "UserRepository" for r in refs)
         assert any(r.symbol_name == "getData" for r in refs)
@@ -219,7 +222,7 @@ class UserService:
 
     def test_includes_context(self):
         """Тест что контекст сохраняется в ссылках."""
-        content = 'var repo = new UserRepository();'
+        content = "var repo = new UserRepository();"
         refs = extract_references_universal(content, "test.cs", "csharp", set())
         assert len(refs) == 1
         assert refs[0].context is not None
@@ -261,3 +264,15 @@ class UserService:
         assert refs[0].ref_line == 1
         assert refs[0].ref_col >= 0
         assert refs[0].ref_file == "test.cs"
+
+
+def test_excludes_common_method_names():
+    from ast_index.references import extract_references_universal
+
+    defined_symbols = set()
+    line = "db.close()"
+    refs = extract_references_universal(
+        content=line, file_path="test.py", language="python", defined_symbols=defined_symbols
+    )
+    symbol_names = {r.symbol_name for r in refs}
+    assert "close" not in symbol_names, f"'close' should be excluded as a common method name"
