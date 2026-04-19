@@ -43,18 +43,18 @@ class CSharpParser(BaseParser):
         symbols: list[Symbol] = []
         inheritances: list[Inheritance] = []
 
-        self._walk_tree(root, content, str(file_path), symbols, inheritances)
+        self._walk_tree(root, content, str(file_path.resolve()), symbols, inheritances)
 
         # Извлечь using директивы
         content_str = content.decode("utf-8", errors="replace")
-        namespace_mapping = extract_using_directives(content_str, str(file_path))
+        namespace_mapping = extract_using_directives(content_str, str(file_path.resolve()))
 
         # Извлечь ссылки с использованием C#-специфичного метода
         references = self.extract_references(
             content=content_str,
-            file_path=str(file_path),
+            file_path=str(file_path.resolve()),
             defined_symbols=symbols,
-            namespace_mapping=namespace_mapping
+            namespace_mapping=namespace_mapping,
         )
 
         return ParsedFile(
@@ -377,11 +377,7 @@ class CSharpParser(BaseParser):
         return name
 
     def extract_references(
-        self,
-        content: str,
-        file_path: str,
-        defined_symbols: list,
-        namespace_mapping=None
+        self, content: str, file_path: str, defined_symbols: list, namespace_mapping=None
     ) -> list:
         """
         C#-специфичное извлечение ссылок.
@@ -403,19 +399,23 @@ class CSharpParser(BaseParser):
             content=content,
             file_path=file_path,
             language=self.language,
-            defined_symbols=defined_names
+            defined_symbols=defined_names,
         )
 
         # Фильтрация базовых ссылок с контекстом
         for ref in base_references:
-            line = content.split('\n')[ref.ref_line - 1] if ref.ref_line <= len(content.split('\n')) else ""
+            line = (
+                content.split("\n")[ref.ref_line - 1]
+                if ref.ref_line <= len(content.split("\n"))
+                else ""
+            )
 
             # Проверка контекста
             if not should_exclude_context(line, ref.ref_col, ref.symbol_name):
                 all_references.append(ref)
 
         # 2. Generic типы
-        lines = content.split('\n')
+        lines = content.split("\n")
         keywords = get_keywords("csharp")
         standard_types = get_standard_types("csharp")
 
@@ -451,12 +451,12 @@ class CSharpParser(BaseParser):
                     all_references.append(
                         Reference(
                             symbol_name=candidate_name,
-                            symbol_file='',
+                            symbol_file="",
                             ref_file=file_path,
                             ref_line=line_num,
                             ref_col=col_pos,
-                            ref_kind='generic',
-                            context=line[:500] if len(line) > 500 else line
+                            ref_kind="generic",
+                            context=line[:500] if len(line) > 500 else line,
                         )
                     )
 

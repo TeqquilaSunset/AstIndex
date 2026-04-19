@@ -40,14 +40,12 @@ class JavaScriptParser(BaseParser):
         symbols: list[Symbol] = []
         inheritances: list[Inheritance] = []
 
-        self._walk_tree(root, content, str(file_path), symbols, inheritances)
+        self._walk_tree(root, content, str(file_path.resolve()), symbols, inheritances)
 
         # Extract references using the universal method
         content_str = content.decode("utf-8", errors="replace")
         references = self.extract_references(
-            content=content_str,
-            file_path=str(file_path),
-            defined_symbols=symbols
+            content=content_str, file_path=str(file_path.resolve()), defined_symbols=symbols
         )
 
         return ParsedFile(

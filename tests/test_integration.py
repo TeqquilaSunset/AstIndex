@@ -185,11 +185,9 @@ class TestSearchIntegration:
         assert result.exit_code == 0 or "No usages found" in result.output
 
         # Test with file filter - should not crash
-        result = runner.invoke(cli, [
-            "usages", "BaseClass",
-            "--root", str(config.root),
-            "--file", "sample.py"
-        ])
+        result = runner.invoke(
+            cli, ["usages", "BaseClass", "--root", str(config.root), "--file", "sample.py"]
+        )
         assert result.exit_code == 0
 
     def test_cli_usages_command_with_show_context(self, config, sample_python_file, tmp_path):
@@ -203,11 +201,9 @@ class TestSearchIntegration:
         runner = CliRunner()
 
         # Test with show-context - should not crash
-        result = runner.invoke(cli, [
-            "usages", "BaseClass",
-            "--root", str(config.root),
-            "--show-context"
-        ])
+        result = runner.invoke(
+            cli, ["usages", "BaseClass", "--root", str(config.root), "--show-context"]
+        )
         assert result.exit_code == 0
 
     def test_cli_usages_command_with_limit_and_context(self, config, sample_python_file, tmp_path):
@@ -221,12 +217,10 @@ class TestSearchIntegration:
         runner = CliRunner()
 
         # Test with both limit and show-context - should not crash
-        result = runner.invoke(cli, [
-            "usages", "BaseClass",
-            "--root", str(config.root),
-            "--show-context",
-            "--limit", "5"
-        ])
+        result = runner.invoke(
+            cli,
+            ["usages", "BaseClass", "--root", str(config.root), "--show-context", "--limit", "5"],
+        )
         assert result.exit_code == 0
 
     def test_no_duplicate_symbols_after_indexing(self, config, sample_python_file):
@@ -250,7 +244,9 @@ class TestSearchIntegration:
 
             # Check that we don't have duplicates with same file_path and line_start
             locations = [(s["file_path"], s["line_start"]) for s in symbols]
-            assert len(locations) == len(set(locations)), f"Found duplicate symbols at same locations: {locations}"
+            assert len(locations) == len(set(locations)), (
+                f"Found duplicate symbols at same locations: {locations}"
+            )
 
     def test_cli_rejects_negative_limit(self, config, sample_python_file):
         """Test that CLI rejects negative limit values."""
@@ -263,28 +259,22 @@ class TestSearchIntegration:
         runner = CliRunner()
 
         # Test search command with negative limit
-        result = runner.invoke(cli, [
-            "search", "BaseClass",
-            "--root", str(config.root),
-            "--limit", "-5"
-        ])
+        result = runner.invoke(
+            cli, ["search", "BaseClass", "--root", str(config.root), "--limit", "-5"]
+        )
         assert result.exit_code != 0
         assert "Limit must be a positive integer" in result.output or "Invalid" in result.output
 
         # Test class command with negative limit
-        result = runner.invoke(cli, [
-            "class", "BaseClass",
-            "--root", str(config.root),
-            "--limit", "-1"
-        ])
+        result = runner.invoke(
+            cli, ["class", "BaseClass", "--root", str(config.root), "--limit", "-1"]
+        )
         assert result.exit_code != 0
 
         # Test usages command with negative limit
-        result = runner.invoke(cli, [
-            "usages", "BaseClass",
-            "--root", str(config.root),
-            "--limit", "0"
-        ])
+        result = runner.invoke(
+            cli, ["usages", "BaseClass", "--root", str(config.root), "--limit", "0"]
+        )
         assert result.exit_code != 0
 
 
@@ -303,7 +293,7 @@ class TestDefinitionCommand:
         with SearchEngine(config=config) as engine:
             result = engine.search_definition(
                 symbol_name="UserRepository",
-                reference_file="/project/Controllers/HomeController.cs"
+                reference_file="/project/Controllers/HomeController.cs",
             )
 
         assert result is not None
@@ -322,13 +312,19 @@ class TestDefinitionCommand:
         runner = CliRunner()
 
         # Test with file reference and JSON output
-        result = runner.invoke(cli, [
-            "definition",
-            "UserRepository",
-            "--root", str(config.root),
-            "--file", "Controllers/HomeController.cs",
-            "--format", "json"
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "definition",
+                "UserRepository",
+                "--root",
+                str(config.root),
+                "--file",
+                "Controllers/HomeController.cs",
+                "--format",
+                "json",
+            ],
+        )
 
         assert result.exit_code == 0
         output = json.loads(result.output)
@@ -393,3 +389,20 @@ class TestFileUtils:
         languages = {lang for _, lang in files}
         assert "python" in languages
         assert "javascript" in languages
+
+
+def test_no_duplicate_paths_after_indexing(tmp_path):
+    """Symbols must use resolved (absolute) paths — no duplicates."""
+    config = Config(root=tmp_path)
+    src = tmp_path / "app.py"
+    src.write_text("class MyClass:\n    pass\n")
+
+    with Indexer(config=config) as indexer:
+        indexer.index()
+
+    db = Database(config.db_path)
+    with db:
+        symbols = db.get_symbols_by_name("MyClass")
+        file_paths = {s["file_path"] for s in symbols}
+        assert len(file_paths) == 1, f"Expected 1 unique path, got {file_paths}"
+        assert str(tmp_path / "app.py") in list(file_paths)[0]
